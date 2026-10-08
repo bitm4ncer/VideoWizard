@@ -8,7 +8,9 @@
  *
  * Jede Antwort steckt in einer Huelle `{ data, code, error }`; ein gesetzter
  * `error` ist ein Fehler, auch bei HTTP 200. `result` ist eine
- * JSON-Zeichenkette mit einer Liste; das erste Element nennt die Datei.
+ * JSON-Zeichenkette mit einer Liste; das erste Element nennt die Datei. Ein
+ * fehlender Eintrag in `/query_result` oder eine abgelaufene Frist wirft,
+ * statt endlos zu warten.
  */
 
 import type { FetchLike, MusicDeps, MusicProvider, MusicRequest, SleepFn } from "./music.js";
@@ -20,6 +22,8 @@ export const POLL_MS = 2000;
 
 /** Grosse Laeufe brauchen Zeit, aber nicht ewig. */
 const GENERATE_TIMEOUT_MS = 20 * 60 * 1000;
+/** Hoechste Wartezeit eines Laufs auf die Fertigstellung, wenn nichts anderes gesetzt ist. */
+const DEFAULT_MAX_WAIT_MS = 20 * 60 * 1000;
 /** Kurzes Zeitlimit fuer /health, damit ein fehlender Dienst schnell auffaellt. */
 const HEALTH_TIMEOUT_MS = 3000;
 
@@ -152,9 +156,14 @@ async function query(base: string, taskId: string, fetchFn: FetchLike): Promise<
     fetchFn,
   );
   const entry = Array.isArray(data) ? data[0] : undefined;
-  const status = entry?.status ?? 0;
+  if (entry === undefined) {
+    // Kein Eintrag heisst nicht "laeuft noch": der Server kennt die Aufgabe
+    // nicht mehr, und weiteres Warten waere vergeblich.
+    throw new Error(`ACE-Step: /query_result kennt die Aufgabe ${taskId} nicht.`);
+  }
+  const status = entry.status ?? 0;
   let file: string | undefined;
-  if (status === 1 && entry?.result) {
+  if (status === 1 && entry.result) {
     try {
       const hits = JSON.parse(entry.result) as Array<{ file?: string }>;
       file = hits[0]?.file;
@@ -178,6 +187,11 @@ async function download(base: string, fileUrl: string, fetchFn: FetchLike): Prom
 
 const realSleep: SleepFn = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
+/** Millisekunden lesbar machen: unter einer Minute in ms, sonst gerundet in Minuten. */
+function durationText(ms: number): string {
+  return ms < 60_000 ? `${ms} ms` : `${Math.round(ms / 60_000)} min`;
+}
+
 /**
  * Der ACE-Step-Anbieter hinter dem gemeinsamen Vertrag. `deps` ist einhakbar,
  * damit der Test ohne Server und ohne echtes Warten laeuft.
@@ -185,6 +199,8 @@ const realSleep: SleepFn = (ms) => new Promise((resolve) => setTimeout(resolve, 
 export function acestepProvider(cfg: AcestepOptions = {}, deps: MusicDeps = {}): MusicProvider {
   const fetchFn = deps.fetch ?? fetch;
   const sleep = deps.sleep ?? realSleep;
+  const now = deps.now ?? Date.now;
+  const maxWaitMs = deps.maxWaitMs ?? DEFAULT_MAX_WAIT_MS;
   const base = baseOf(cfg);
 
   return {
@@ -192,6 +208,7 @@ export function acestepProvider(cfg: AcestepOptions = {}, deps: MusicDeps = {}):
     detect: () => healthy(base, fetchFn),
     generate: async (req) => {
       const id = await release(base, cfg, req, fetchFn);
+      const deadline = now() + maxWaitMs;
 
       let status = 0;
       let file: string | undefined;
@@ -200,6 +217,12 @@ export function acestepProvider(cfg: AcestepOptions = {}, deps: MusicDeps = {}):
         status = state.status;
         file = state.file;
         if (status === 1 || status === 2) break;
+        if (now() >= deadline) {
+          throw new Error(
+            `ACE-Step: Die Frist von ${durationText(maxWaitMs)} fuer Aufgabe ${id} ` +
+            `ist abgelaufen (Status ${status}).`,
+          );
+        }
         await sleep(POLL_MS);
       }
 

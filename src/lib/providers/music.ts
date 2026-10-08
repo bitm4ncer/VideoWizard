@@ -20,6 +20,10 @@ export interface MusicDeps {
   fetch?: FetchLike;
   /** Vorgabe: ein echter Timer. */
   sleep?: SleepFn;
+  /** Wie die Uhr gelesen wird; Vorgabe: Date.now. Einhakbar fuer Fristen im Test. */
+  now?: () => number;
+  /** Hoechste Wartezeit eines Laufs in Millisekunden; die Vorgabe setzt der Anbieter. */
+  maxWaitMs?: number;
 }
 
 /** Ein Take-Wunsch an einen Musik-Anbieter. */

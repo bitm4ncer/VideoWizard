@@ -120,6 +120,28 @@ describe("acestepProvider: einen Take erzeugen", () => {
     expect(waits).toEqual([POLL_MS, POLL_MS]);
   });
 
+  it("bricht ab, wenn die Frist ohne Fertigstellung verstreicht", async () => {
+    const { fetch, calls } = stubFetch([
+      () => envelope({ task_id: "t8" }),
+      ...Array.from({ length: 4 }, () => () => envelope([{ task_id: "t8", status: 0 }])),
+    ]);
+    // Der echte Timer wird nie benutzt: der Schlaf schiebt nur die Uhr vor.
+    let clock = 0;
+    const waits: number[] = [];
+    const sleep: SleepFn = async (ms) => {
+      waits.push(ms);
+      clock += ms;
+    };
+
+    const provider = acestepProvider({}, { fetch, sleep, now: () => clock, maxWaitMs: 3 * POLL_MS });
+
+    await expect(provider.generate({ prompt: "x", seconds: 10 })).rejects.toThrow(
+      `${3 * POLL_MS} ms`,
+    );
+    expect(waits).toEqual([POLL_MS, POLL_MS, POLL_MS]);
+    expect(calls.filter((call) => call.url.endsWith("/query_result"))).toHaveLength(4);
+  });
+
   it("sendet model, seed und use_random_seed nur nach Angabe", async () => {
     const { fetch, calls } = stubFetch([
       () => envelope({ task_id: "t2" }),
@@ -187,6 +209,16 @@ describe("acestepProvider: Fehler", () => {
     await expect(
       acestepProvider({}, { fetch, sleep: async () => {} }).generate({ prompt: "x", seconds: 10 }),
     ).rejects.toThrow(/keine Datei/);
+  });
+
+  it("wirft, wenn /query_result die Aufgabe nicht kennt", async () => {
+    const { fetch } = stubFetch([
+      () => envelope({ task_id: "t7" }),
+      () => envelope([]),
+    ]);
+    await expect(
+      acestepProvider({}, { fetch, sleep: async () => {} }).generate({ prompt: "x", seconds: 10 }),
+    ).rejects.toThrow(/t7/);
   });
 
   it("wirft, wenn keine task_id kommt", async () => {

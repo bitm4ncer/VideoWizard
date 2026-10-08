@@ -43,18 +43,24 @@ parametrisiert, nicht nachgebaut.
 
 Checkliste:
 
-- [ ] **Eintrag in `blocks/index.json`** mit den Pflichtfeldern:
+- [ ] **Eintrag in `blocks/index.json`** mit den Pflichtfeldern, die
+      `parseEntry` in `src/lib/blocks.ts` prueft:
       - `id`: eindeutig, kebab-case; Skills nennen die `id`, nie einen Pfad.
       - `kind`: Art des Artefakts, zum Beispiel `remotion-component` oder
         `ffmpeg-recipe`.
       - `capability`: die Faehigkeit, die der Baustein bedient, zum Beispiel
         `captions`.
+      - `purpose`: wofuer der Baustein da ist, in einem Satz.
+      - `inputs`: was er erwartet, als Liste von Strings, etwa `["audio"]`;
+        leer heisst, er braucht nichts.
+      - `requires`: `{ tools, providers }`, welche Werkzeuge und Anbieter
+        vorhanden sein muessen; beides sind Listen von Strings.
       - `license`: nur weitergebbare Lizenzen (MIT, Apache-2.0, CC0, CC-BY).
         Schriften und Medien werden gesondert geprueft.
       - `version`: beginnt bei 1; jede Aenderung erhoeht sie.
       - `entry`: Pfad zur Einstiegsdatei.
-- [ ] **Selbsttragend.** Kein Baustein haengt vom Kern ab. Braucht er ein
-      Werkzeug oder einen Dienst, steht das in `requires`.
+- [ ] **Selbsttragend.** Kein Baustein haengt vom Kern ab; Werkzeuge und
+      Anbieter, die er braucht, stehen in `requires`.
 - [ ] **Genau ein Ort.** Keine Duplikate; der Integritaetscheck stellt sicher,
       dass jede Datei unter `blocks/` einen Eintrag hat und umgekehrt.
 - [ ] **Getestet, wo pruefbar.** ffmpeg-Rezepte und Remotion-Komponenten haben

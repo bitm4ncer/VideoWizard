@@ -54,9 +54,12 @@ Baustein `ffmpeg-loudnorm` auf -16 und -14 LUFS bringen (`tool-ffmpeg`).
 ## Grenzen
 
 - Lokal, ohne Schluessel und ohne Kosten; dafuer braucht der Lauf GPU und
-  Zeit (Zeitlimit je Anfrage 20 Minuten, Standabfrage alle 2 Sekunden).
+  Zeit (Zeitlimit je Anfrage und je Lauf 20 Minuten, Standabfrage alle
+  2 Sekunden).
 - Status 2 wirft "ACE-Step-Generierung fehlgeschlagen."; ein fertiger Lauf
   ohne genannte Datei wirft ebenfalls.
+- Ein fehlender Eintrag in `/query_result` wirft; eine abgelaufene Frist
+  wirft mit der genannten Zeitgrenze, statt still weiterzulaufen.
 - Keine Annahmen ueber andere Endpunkte oder Felder; der Massstab ist der
   Provider-Vertrag in `src/lib/providers/acestep.ts`.
 
