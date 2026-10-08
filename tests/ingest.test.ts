@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { createHash } from "node:crypto";
-import { mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, readdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { CURRENT_SCHEMA, loadProject, saveProject } from "../src/lib/project.js";
@@ -27,6 +27,13 @@ const AUDIO_PROBE = {
   streams: [{ codec_name: "aac" }],
 };
 
+/** Echte ffprobe-Ausgabe der Tonabfrage ohne Tonspur. */
+const NO_AUDIO_PROBE = {
+  programs: [],
+  stream_groups: [],
+  streams: [],
+};
+
 interface FakeRun {
   calls: Array<{ bin: string; args: string[] }>;
   run: RunFn;
@@ -39,7 +46,7 @@ interface FakeRun {
  */
 function fakeRun(
   video: unknown,
-  options: { failFfmpeg?: boolean; target?: unknown } = {},
+  options: { failFfmpeg?: boolean; target?: unknown; audio?: unknown } = {},
 ): FakeRun {
   const calls: Array<{ bin: string; args: string[] }> = [];
   const run: RunFn = async (bin, args): Promise<RunResult> => {
@@ -47,7 +54,7 @@ function fakeRun(
     if (bin === "ffprobe") {
       const file = args[args.length - 1] ?? "";
       let fixture = video;
-      if (args.includes("a:0")) fixture = AUDIO_PROBE;
+      if (args.includes("a:0")) fixture = options.audio ?? AUDIO_PROBE;
       else if (options.target !== undefined && file.endsWith("raw.mp4")) fixture = options.target;
       return { stdout: JSON.stringify(fixture), stderr: "", code: 0 };
     }
@@ -240,6 +247,58 @@ describe("ingest", () => {
     expect(fehler).toContain("ffmpeg scheiterte (Exit 1)");
     expect(fehler).toContain("Fehlerausgabe von ffmpeg");
     expect(await loadProject(dir)).toEqual(vorher);
+  });
+
+  it("lehnt eine Quelle ohne Tonspur ab, bevor etwas angelegt wird", async () => {
+    const dir = await tempProject();
+    const vorher = await loadProject(dir);
+    const videoPath = await inputFile(dir, "stumm.mp4");
+    const stummLauf = fakeRun(videoProbe(1280, 720, "25/1", 5), { audio: NO_AUDIO_PROBE });
+
+    const fehler = await ingest(dir, videoPath, "Stumm", { run: stummLauf.run }).then(
+      () => {
+        throw new Error("ingest haette werfen muessen");
+      },
+      (error: Error) => error.message,
+    );
+
+    expect(fehler).toContain("keine Tonspur");
+    expect(fehler).toContain("stumm.mp4");
+    // Nichts angelegt: Wahrheitsdatei unveraendert, kein sources-Ordner.
+    expect(await loadProject(dir)).toEqual(vorher);
+    expect(await readdir(dir)).not.toContain("sources");
+  });
+
+  it("lehnt eine Quelle ohne brauchbares Bildformat ab, bevor das Projektformat gesetzt wird", async () => {
+    const dir = await tempProject();
+    const vorher = await loadProject(dir);
+
+    // Unlesbare Bildrate ("0/0" wird zu 0) wuerde das Projektformat vergiften.
+    const ohneRate = await inputFile(dir, "ohne-rate.mp4");
+    const rateFehler = await ingest(dir, ohneRate, "Ohne Rate", {
+      run: fakeRun(videoProbe(1920, 1080, "0/0", 5)).run,
+    }).then(
+      () => {
+        throw new Error("ingest haette werfen muessen");
+      },
+      (error: Error) => error.message,
+    );
+    expect(rateFehler).toContain("kein brauchbares Bildformat");
+
+    // Fehlende Abmessungen sind genauso unbrauchbar.
+    const ohneBild = await inputFile(dir, "ohne-bild.mp4");
+    const bildFehler = await ingest(dir, ohneBild, "Ohne Bild", {
+      run: fakeRun(videoProbe(0, 0, "25/1", 5)).run,
+    }).then(
+      () => {
+        throw new Error("ingest haette werfen muessen");
+      },
+      (error: Error) => error.message,
+    );
+    expect(bildFehler).toContain("kein brauchbares Bildformat");
+
+    expect(await loadProject(dir)).toEqual(vorher);
+    expect(await readdir(dir)).not.toContain("sources");
   });
 
   it("liest fuer die Pruefsumme hoechstens die ersten 8 MB", async () => {

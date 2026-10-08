@@ -70,9 +70,11 @@ function needsNormalisation(info: ProbeResult, target: Format): boolean {
 
 /**
  * Liest eine Aufnahme ein: Quelle pruefen, einmalig auf das Projektformat
- * bringen, Ton als WAV und Standbilder ablegen. Die erste Quelle setzt das
- * Projektformat, jede weitere folgt ihm; deshalb gehoert die Hauptquelle
- * zuerst eingelesen. Fehlt ein Label, gilt der Dateiname.
+ * bringen, Ton als WAV und Standbilder ablegen. Eine Quelle ohne Tonspur oder
+ * ohne brauchbares Bildformat wird abgelehnt, bevor irgendetwas angelegt
+ * wird. Die erste Quelle setzt das Projektformat, jede weitere folgt ihm;
+ * deshalb gehoert die Hauptquelle zuerst eingelesen. Fehlt ein Label, gilt
+ * der Dateiname.
  */
 export async function ingest(
   projectDir: string,
@@ -82,6 +84,19 @@ export async function ingest(
 ): Promise<Source> {
   const project = await loadProject(projectDir);
   const info = await probe(videoPath, deps.run);
+
+  // Ohne Ton scheitert spaeter die WAV-Ablage; ohne brauchbares Bildformat
+  // wuerde bei der ersten Quelle ein unbrauchbares Projektformat entstehen.
+  if (!info.hasAudio) {
+    throw new Error(`Die Quelle hat keine Tonspur: ${videoPath}`);
+  }
+  if (info.fps <= 0 || info.width <= 0 || info.height <= 0) {
+    throw new Error(
+      `Die Quelle liefert kein brauchbares Bildformat: ${videoPath} ` +
+      `(${info.width}x${info.height}, ${info.fps} fps)`,
+    );
+  }
+
   const paths = projectPaths(projectDir);
   const id = nextSourceId(project);
   const dir = join(paths.sourcesDir, id);
