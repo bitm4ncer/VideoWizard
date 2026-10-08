@@ -10,6 +10,7 @@
   "scripts": {
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
+    "catalog": "tsx scripts/catalog.ts",
     "vz": "tsx src/cli.ts"
   },
   "devDependencies": {
