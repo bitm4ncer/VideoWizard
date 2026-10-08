@@ -8,7 +8,7 @@
     "node": ">=22"
   },
   "scripts": {
-    "test": "vitest run --passWithNoTests",
+    "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "vz": "tsx src/cli.ts"
   },
