@@ -1,0 +1,21 @@
+{
+  "name": "videowizard",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Universal agent suite for video planning and production.",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "test": "vitest run --passWithNoTests",
+    "typecheck": "tsc --noEmit",
+    "vz": "tsx src/cli.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.5",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.3"
+  }
+}

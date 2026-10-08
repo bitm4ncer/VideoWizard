@@ -1,5 +1,17 @@
+# Abhaengigkeiten
 node_modules/
-.superpowers/
+
+# Build, Abdeckung und Zwischendateien
 dist/
+coverage/
+*.tsbuildinfo
+
+# Harness-Arbeitsverzeichnis
+.superpowers/
+
+# Protokolle
 *.log
 
+# Betriebssystem
+.DS_Store
+Thumbs.db
