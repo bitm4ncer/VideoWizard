@@ -1,0 +1,24 @@
+[
+  {
+    "id": "ffmpeg-loudnorm",
+    "kind": "ffmpeg-recipe",
+    "capability": "render",
+    "purpose": "Loudness nach EBU R128: Stimme auf -16, Endmischung auf -14 LUFS",
+    "inputs": ["audio"],
+    "requires": { "tools": ["ffmpeg"], "providers": [] },
+    "license": "MIT",
+    "version": 1,
+    "entry": "ffmpeg/loudnorm/recipe.md"
+  },
+  {
+    "id": "beats-short-retention",
+    "kind": "beat-template",
+    "capability": "planning",
+    "purpose": "Retention-Struktur fuer Shorts: Hook, Confirm, Payoff, Loop oder CTA",
+    "inputs": [],
+    "requires": { "tools": [], "providers": [] },
+    "license": "MIT",
+    "version": 1,
+    "entry": "beats/short-retention/template.md"
+  }
+]
