@@ -96,6 +96,34 @@ export interface Delivery {
   targets: string[];
 }
 
+/** Musikbett unter der Stimme. Fehlende Werte fallen auf die Vorgaben zurueck. */
+export interface Music {
+  /** Pfad relativ zum Projektordner. */
+  file: string;
+  /** Absenkung in Dezibel, Vorgabe -22. */
+  gain_db?: number;
+  /** Ducking gegen die Stimme in Dezibel, Vorgabe -12; 0 schaltet es ab. */
+  duck_db?: number;
+}
+
+/** Outro am Ende des Videos; fehlt es, endet das Video mit dem letzten Block. */
+export interface Outro {
+  /** Pfad relativ zum Projektordner. */
+  file: string;
+  /** Ueberblendung in Sekunden, Vorgabe 0.5. */
+  crossfade?: number;
+}
+
+/** Tonwerte des Projekts; fehlende Werte fallen auf die erprobten Vorgaben zurueck. */
+export interface AudioSettings {
+  /** Pegel der Sprachspur in LUFS, Vorgabe -16. */
+  voice_lufs?: number;
+  /** Pegel der fertigen Mischung in LUFS, Vorgabe -14. */
+  master_lufs?: number;
+  /** Musikbett; fehlt es, wird ohne Musik gerendert. */
+  music?: Music;
+}
+
 /** Die Wahrheitsdatei project.json eines Projekts. */
 export interface Project {
   schema: number;
@@ -107,4 +135,8 @@ export interface Project {
   blocks: Block[];
   capabilities: Capabilities;
   delivery: Delivery;
+  /** Tonwerte; fehlen sie, gelten die Vorgaben aus dem Ruling. */
+  audio?: AudioSettings;
+  /** Outro; fehlt es, endet das Video mit dem letzten Block. */
+  outro?: Outro;
 }
