@@ -135,6 +135,26 @@ export async function probe(file: string, run: RunFn = spawnRun): Promise<ProbeR
 }
 
 /**
+ * Dauer einer Datei in Sekunden, ohne eine Bildspur zu verlangen: Tondateien
+ * haben keine, `probe` wuerde daran scheitern. Die Dauer wird gemessen, nicht
+ * geschaetzt; ein unbrauchbarer Wert ist ein Fehler.
+ */
+export async function probeDuration(file: string, run: RunFn = spawnRun): Promise<number> {
+  const data = await probeJson([
+    "-v", "error",
+    "-show_entries", "format=duration",
+    "-of", "json",
+    file,
+  ], run);
+
+  const duration = Number(data.format?.duration ?? 0);
+  if (!Number.isFinite(duration) || duration <= 0) {
+    throw new Error(`${file} hat keine brauchbare Dauer.`);
+  }
+  return duration;
+}
+
+/**
  * Fuehrt ffmpeg aus und liefert die Fehlerausgabe zurueck.
  * ffmpeg schreibt seinen Fortschritt grundsaetzlich nach stderr, das ist kein
  * Fehler. Scheitert der Lauf, nennt der Fehler den Befehl und das Ende der

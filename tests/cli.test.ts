@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { runCli } from "../src/cli.js";
 import { projectPaths } from "../src/lib/paths.js";
 import { CURRENT_SCHEMA, saveProject } from "../src/lib/project.js";
-import type { Project } from "../src/lib/types.js";
+import type { Block, Project } from "../src/lib/types.js";
 
 let dir = "";
 let out: string[] = [];
@@ -48,6 +48,23 @@ function beispiel(over: Partial<Project> = {}): Project {
       music: { provider: "acestep", options: { model: "acestep-v15-turbo" } },
     },
     delivery: { targets: ["youtube-shorts", "tiktok"] },
+    ...over,
+  };
+}
+
+/** Ein Block; Abweichungen kommen ueber over. */
+function block(over: Partial<Block> = {}): Block {
+  return {
+    id: "b001",
+    kind: "take",
+    source_id: "s01",
+    source_in: 0,
+    source_out: 10,
+    silences: [],
+    text: "Der Text",
+    pause_after: 0,
+    fit: "none",
+    overlays: [],
     ...over,
   };
 }
@@ -97,6 +114,59 @@ describe("runCli: status", () => {
     expect(text(err)).toContain("Aufruf");
     expect(out).toEqual([]);
   });
+
+  it("nennt je Block Kennung, Zustand und Textanfang und zaehlt die offenen", async () => {
+    await saveProject(dir, beispiel({
+      blocks: [
+        block({
+          id: "b001",
+          text: "Der fertige Text",
+          tts: {
+            file: "audio/tts/b001.wav",
+            duration: 2,
+            hash: "h",
+            generated_at: "2026-10-01",
+          },
+        }),
+        block({ id: "b002", text: "Noch offen" }),
+        block({ id: "b003", text: undefined }),
+      ],
+    }));
+
+    const code = await runCli(["status", dir]);
+
+    expect(code).toBe(0);
+    const lines = out.map((line) => line.trim());
+    expect(lines.some((line) =>
+      line.startsWith("b001") && line.includes("ok") && line.includes("Der fertige Text"),
+    )).toBe(true);
+    expect(lines.some((line) =>
+      line.startsWith("b002") && line.includes("todo") && line.includes("Noch offen"),
+    )).toBe(true);
+    expect(lines.some((line) =>
+      line.startsWith("b003") && line.includes("todo") && line.includes("(kein Text)"),
+    )).toBe(true);
+    expect(text(out)).toContain("offene Bloecke: 2 von 3");
+    expect(err).toEqual([]);
+  });
+
+  it("kuerzt lange Texte auf den Anfang", async () => {
+    const lang = `${"A".repeat(30)}ENDE-der-lange-text`;
+    await saveProject(dir, beispiel({ blocks: [block({ text: lang })] }));
+
+    const code = await runCli(["status", dir]);
+
+    expect(code).toBe(0);
+    expect(text(out)).toContain(`${lang.slice(0, 40)}...`);
+    expect(text(out)).not.toContain(lang.slice(0, 41));
+  });
+
+  it("meldet ein Projekt ohne Bloecke als null offen", async () => {
+    await saveProject(dir, beispiel());
+    const code = await runCli(["status", dir]);
+    expect(code).toBe(0);
+    expect(text(out)).toContain("offene Bloecke: 0 von 0");
+  });
 });
 
 describe("runCli: help und Fehler", () => {
@@ -107,6 +177,23 @@ describe("runCli: help und Fehler", () => {
     expect(text(out)).toContain("doctor");
     expect(text(out)).toContain("help");
     expect(err).toEqual([]);
+  });
+
+  it("nennt in der Hilfe auch die neuen Befehle ingest, voice und render", async () => {
+    const code = await runCli(["help"]);
+    expect(code).toBe(0);
+    expect(text(out)).toContain("ingest");
+    expect(text(out)).toContain("voice");
+    expect(text(out)).toContain("render");
+    expect(err).toEqual([]);
+  });
+
+  it("nennt bei ingest ohne Pfade die Nutzung und endet mit 2", async () => {
+    const code = await runCli(["ingest"]);
+    expect(code).toBe(2);
+    expect(text(err)).toMatch(/Aufruf/);
+    expect(text(err)).toContain("ingest <ordner> <video>");
+    expect(out).toEqual([]);
   });
 
   it("zeigt ohne Argumente die Hilfe", async () => {

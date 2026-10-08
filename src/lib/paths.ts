@@ -10,6 +10,8 @@ export interface ProjectPaths {
   planFile: string;
   /** Der Ordner aller Quellen; je Quelle ein Unterordner mit ihrer Kennung. */
   sourcesDir: string;
+  /** Der Ordner der vertonten Bloecke: audio/tts. */
+  ttsDir: string;
 }
 
 export function projectPaths(dir: string): ProjectPaths {
@@ -19,5 +21,6 @@ export function projectPaths(dir: string): ProjectPaths {
     projectFile: join(absolute, "project.json"),
     planFile: join(absolute, "plan.md"),
     sourcesDir: join(absolute, "sources"),
+    ttsDir: join(absolute, "audio", "tts"),
   };
 }

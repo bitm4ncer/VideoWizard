@@ -1,6 +1,22 @@
 import { stat } from "node:fs/promises";
 import { projectPaths } from "../lib/paths.js";
+import { blockStatus } from "../lib/plan.js";
 import { loadProject } from "../lib/project.js";
+import type { Block } from "../lib/types.js";
+
+/** So viele Zeichen des Blocktextes zeigt `status` je Block. */
+const TEXT_PREVIEW = 40;
+
+/** Eine Zeile je Block: Kennung, Zustand und der Anfang des Textes. */
+function blockLine(block: Block, idWidth: number): string {
+  const preview = block.text?.trim().replace(/\s+/g, " ") ?? "";
+  const shown = preview === ""
+    ? "(kein Text)"
+    : preview.length > TEXT_PREVIEW
+      ? `${preview.slice(0, TEXT_PREVIEW)}...`
+      : preview;
+  return `  ${block.id.padEnd(idWidth)}  ${blockStatus(block).padEnd(4)}  ${shown}`;
+}
 
 /**
  * Prueft, ob die Wahrheitsdatei da ist. Nur ENOENT gilt als "fehlt"; andere
@@ -40,6 +56,12 @@ async function runStatus(args: string[]): Promise<number> {
     }
     const project = await loadProject(dir);
     console.log(`Projekt "${project.title}" (${project.id}) in ${absolute}`);
+    if (project.blocks.length > 0) {
+      const idWidth = Math.max(...project.blocks.map((block) => block.id.length));
+      for (const block of project.blocks) console.log(blockLine(block, idWidth));
+    }
+    const open = project.blocks.filter((block) => blockStatus(block) === "todo").length;
+    console.log(`offene Bloecke: ${open} von ${project.blocks.length}`);
     return 0;
   } catch (error) {
     console.error(`Fehler: ${errorText(error)}`);

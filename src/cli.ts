@@ -1,6 +1,9 @@
 import { pathToFileURL } from "node:url";
 import { doctorCommand } from "./commands/doctor.js";
+import { ingestCommand } from "./commands/ingest.js";
+import { renderCommand } from "./commands/render.js";
 import { statusCommand } from "./commands/status.js";
+import { voiceCommand } from "./commands/voice.js";
 
 /** Ein Befehl des CLIs. `args` sind die Argumente hinter dem Befehlsnamen. */
 interface Command {
@@ -18,6 +21,9 @@ interface Command {
  */
 const commands: Command[] = [
   statusCommand,
+  ingestCommand,
+  voiceCommand,
+  renderCommand,
   doctorCommand,
   {
     name: "help",
