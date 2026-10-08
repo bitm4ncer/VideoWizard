@@ -8,6 +8,8 @@ export interface ProjectPaths {
   projectFile: string;
   /** Der Plan, den die Planung schreibt (Abschnitt 9). */
   planFile: string;
+  /** Der Ordner aller Quellen; je Quelle ein Unterordner mit ihrer Kennung. */
+  sourcesDir: string;
 }
 
 export function projectPaths(dir: string): ProjectPaths {
@@ -16,5 +18,6 @@ export function projectPaths(dir: string): ProjectPaths {
     dir: absolute,
     projectFile: join(absolute, "project.json"),
     planFile: join(absolute, "plan.md"),
+    sourcesDir: join(absolute, "sources"),
   };
 }

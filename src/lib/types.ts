@@ -61,8 +61,26 @@ export interface Block {
   overlays: Overlay[];
 }
 
-/** Rohmaterial eines Projekts; die Felder folgen mit dem Ingest (Etappe 2). */
-export type Source = Record<string, unknown>;
+/**
+ * Rohmaterial eines Projekts, einmal beim Ingest aufgenommen. Alle Pfade
+ * relativ zum Projektordner (bewaehrt in der VideoPipeline).
+ */
+export interface Source {
+  /** Kennung, fortlaufend "s01", bewaehrt in der VideoPipeline. */
+  id: string;
+  /** Anzeigename der Quelle, etwa der Dateiname der Aufnahme. */
+  label: string;
+  /** Der abgelegte Film, relativ zum Projektordner. */
+  file: string;
+  /** Aufnahmedatum als ISO-Datum YYYY-MM-DD. */
+  added: string;
+  /** Dauer in Sekunden, gemessen am abgelegten Film. */
+  duration: number;
+  /** SHA-256 ueber Dateigroesse und die ersten 8 MB, auf 32 Zeichen gekuerzt. */
+  checksum: string;
+  /** true, wenn Bildrate und Aufloesung auf das Projektformat gebracht wurden. */
+  normalized: boolean;
+}
 
 /** Wahl eines Anbieters je Faehigkeit. */
 export interface CapabilityChoice {
