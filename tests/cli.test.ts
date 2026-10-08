@@ -100,10 +100,11 @@ describe("runCli: status", () => {
 });
 
 describe("runCli: help und Fehler", () => {
-  it("nennt in der Hilfe die Befehle status und help", async () => {
+  it("nennt in der Hilfe die Befehle status, doctor und help", async () => {
     const code = await runCli(["help"]);
     expect(code).toBe(0);
     expect(text(out)).toContain("status");
+    expect(text(out)).toContain("doctor");
     expect(text(out)).toContain("help");
     expect(err).toEqual([]);
   });
