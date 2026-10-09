@@ -20,5 +20,16 @@
     "license": "MIT",
     "version": 1,
     "entry": "beats/short-retention/template.md"
+  },
+  {
+    "id": "ffmpeg-captions",
+    "kind": "ffmpeg-recipe",
+    "capability": "captions",
+    "purpose": "Wortzeiten als ASS-Untertitel brennen, Stilwerte aus der Safe-Zone",
+    "inputs": ["video", "words"],
+    "requires": { "tools": ["ffmpeg"], "providers": [] },
+    "license": "MIT",
+    "version": 1,
+    "entry": "ffmpeg/captions/recipe.md"
   }
 ]

@@ -308,4 +308,71 @@ describe("renderProject", () => {
 
     expect(calls).toEqual([]);
   });
+
+  it("warnt ohne Wortzeiten und rendert ohne Untertitel, wenn captions gesetzt ist", async () => {
+    const dir = await tempProject();
+    const { calls, run } = fakeRun();
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    try {
+      const output = await renderProject(dir, { captions: true }, { run });
+
+      expect(await readFile(output, "utf8")).toBe("erzeugt");
+      expect(warn.mock.calls.map((entry) => String(entry[0])).join(" "))
+        .toMatch(/Untertitel/);
+      expect(ffmpegCalls(calls).some((call) =>
+        call.args.some((arg) => arg.includes("subtitles=")))).toBe(false);
+      await expect(readFile(join(dir, "out", "captions.ass"), "utf8")).rejects.toThrow();
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it("brennt mit captions die Wortzeiten als ASS und nimmt sie in den Endlauf", async () => {
+    const dir = await tempProject();
+    await mkdir(join(dir, "sources", "s01"), { recursive: true });
+    await writeFile(join(dir, "sources", "s01", "words.json"), JSON.stringify([
+      { start: 0.5, end: 1.2, text: "Hallo" },
+      { start: 1.4, end: 2.0, text: "Welt" },
+    ]), "utf8");
+    const { calls, run } = fakeRun();
+
+    await renderProject(dir, { captions: true }, { run });
+
+    const assFile = join(dir, "out", "captions.ass");
+    expect(await readFile(assFile, "utf8")).toContain(
+      "Dialogue: 0,0:00:00.50,0:00:02.00,Default,,0,0,0,,Hallo Welt",
+    );
+
+    const ffmpeg = ffmpegCalls(calls);
+    const brennen = ffmpeg.find((call) => valueAfter(call.args, "-vf").startsWith("subtitles="));
+    expect(brennen).toBeDefined();
+    const maskiert = assFile.replace(/\\/g, "/").replace(/:/g, "\\:");
+    expect(valueAfter(brennen!.args, "-vf")).toBe(`subtitles='${maskiert}'`);
+
+    // Der Endlauf nimmt die gebrannte Fassung.
+    const final = ffmpeg[ffmpeg.length - 1];
+    expect(valueAfter(final!.args, "-i")).toBe(join(dir, ".cache", "render", "main-captions.mp4"));
+  });
+
+  it("brennt vor dem Outro, der Endlauf blendet die Untertitel-Fassung ueber", async () => {
+    const dir = await tempProject({ outro: { file: "outro/ende.mp4" } });
+    await mkdir(join(dir, "sources", "s01"), { recursive: true });
+    await mkdir(join(dir, "outro"), { recursive: true });
+    await writeFile(join(dir, "sources", "s01", "words.json"), JSON.stringify([
+      { start: 1, end: 2, text: "Hallo" },
+    ]), "utf8");
+    await writeFile(join(dir, "outro", "ende.mp4"), "outro", "utf8");
+    const { calls, run } = fakeRun();
+
+    await renderProject(dir, { captions: true }, { run });
+
+    const ffmpeg = ffmpegCalls(calls);
+    const brennenIndex = ffmpeg.findIndex((call) =>
+      valueAfter(call.args, "-vf").startsWith("subtitles="));
+    const final = ffmpeg[ffmpeg.length - 1];
+    expect(brennenIndex).toBeGreaterThanOrEqual(0);
+    expect(ffmpeg.indexOf(final!)).toBeGreaterThan(brennenIndex);
+    expect(valueAfter(final!.args, "-i")).toBe(join(dir, ".cache", "render", "main-captions.mp4"));
+    expect(valueAfter(final!.args, "-filter_complex")).toContain("xfade=");
+  });
 });

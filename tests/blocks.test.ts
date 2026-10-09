@@ -137,7 +137,7 @@ describe("checkIntegrity", () => {
 describe("die Startbausteine", () => {
   it("stehen mit den festgelegten Feldern im Verzeichnis", async () => {
     const eintraege = await loadIndex(repoRoot);
-    expect(eintraege).toHaveLength(2);
+    expect(eintraege).toHaveLength(3);
 
     const loudnorm = eintraege.find((entry) => entry.id === "ffmpeg-loudnorm");
     expect(loudnorm?.kind).toBe("ffmpeg-recipe");
@@ -153,6 +153,14 @@ describe("die Startbausteine", () => {
     expect(beats?.license).toBe("MIT");
     expect(beats?.version).toBe(1);
     expect(beats?.entry).toBe("beats/short-retention/template.md");
+
+    const captions = eintraege.find((entry) => entry.id === "ffmpeg-captions");
+    expect(captions?.kind).toBe("ffmpeg-recipe");
+    expect(captions?.capability).toBe("captions");
+    expect(captions?.license).toBe("MIT");
+    expect(captions?.version).toBe(1);
+    expect(captions?.entry).toBe("ffmpeg/captions/recipe.md");
+    expect(captions?.requires.tools).toContain("ffmpeg");
   });
 
   it("laedt das loudnorm-Rezept mit seinen exakten Werten", async () => {
@@ -188,5 +196,17 @@ describe("die Startbausteine", () => {
     ]) {
       expect(inhalt).toContain(wort);
     }
+  });
+
+  it("laedt das captions-Rezept mit dem subtitles-Filter", async () => {
+    const block = await loadBlock(repoRoot, "ffmpeg-captions");
+    expect(block.files).toEqual(["blocks/ffmpeg/captions/recipe.md"]);
+
+    const inhalt = await readFile(
+      join(repoRoot, "blocks", "ffmpeg", "captions", "recipe.md"),
+      "utf8",
+    );
+    expect(inhalt).toContain("subtitles=");
+    expect(inhalt).toMatch(/Safe-Zone/);
   });
 });

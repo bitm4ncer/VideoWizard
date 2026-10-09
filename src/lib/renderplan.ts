@@ -1,11 +1,14 @@
 import { computeFit } from "./fit.js";
 import { blockStatus } from "./plan.js";
 import type { BlockKind, Format, Music, Outro, Project } from "./types.js";
+import type { TranscriptWord } from "./providers/transcript.js";
 
 /** Ein Bildabschnitt des Render-Plans: was geschnitten und gehalten wird. */
 export interface VideoSegment {
   blockId: string;
   kind: BlockKind;
+  /** Quelle des Bildes; ihre Wortzeiten tragen die Untertitel. */
+  sourceId: string;
   /** Pfad relativ zum Projektordner. */
   sourceFile: string;
   /** Verbleibende Bereiche der Quelle, absolute Zeiten. */
@@ -94,6 +97,7 @@ export function buildRenderPlan(
     video.push({
       blockId: block.id,
       kind: block.kind,
+      sourceId: block.source_id,
       sourceFile: source.file,
       ranges: block.kind === "take"
         ? remainingRanges(block.source_in, fit.effectiveOut, fit.cuts)
@@ -136,4 +140,48 @@ export function buildRenderPlan(
     outro: project.outro ?? null,
     warnings,
   };
+}
+
+/**
+ * Legt die Wortzeiten eines Blocks auf die Ausgabeachse: Jede Zeit laeuft
+ * durch die verbleibenden Bereiche (was in einem entfernten Schnitt liegt,
+ * entfaellt) und wird danach durch das Tempo geteilt. Reicht ein Wort in einen
+ * entfernten Schnitt hinein, bleibt nur sein verbleibender Teil. `freeze`
+ * haengt hinten an und verschiebt nichts, deshalb geht es hier nicht ein.
+ */
+export function mapWordsToOutput(
+  segment: VideoSegment,
+  words: TranscriptWord[],
+): TranscriptWord[] {
+  if (segment.ranges.length === 0 || words.length === 0) return [];
+
+  const speed = segment.speed > 0 ? segment.speed : 1;
+  // Ausgabebeginn jedes Bereichs, noch vor der Tempoteilung.
+  const starts: number[] = [];
+  let cursor = 0;
+  for (const [from, to] of segment.ranges) {
+    starts.push(cursor);
+    cursor += to - from;
+  }
+
+  const mapped: TranscriptWord[] = [];
+  for (const word of words) {
+    let start: number | null = null;
+    let end: number | null = null;
+    segment.ranges.forEach(([from, to], index) => {
+      const overlapStart = Math.max(word.start, from);
+      const overlapEnd = Math.min(word.end, to);
+      if (overlapEnd - overlapStart <= 0) return;
+      const offset = starts[index] ?? 0;
+      if (start === null) start = offset + (overlapStart - from);
+      end = offset + (overlapEnd - from);
+    });
+    if (start === null || end === null) continue;
+    mapped.push({
+      start: Number((start / speed).toFixed(3)),
+      end: Number((end / speed).toFixed(3)),
+      text: word.text,
+    });
+  }
+  return mapped;
 }

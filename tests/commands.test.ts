@@ -381,6 +381,23 @@ describe("runRender", () => {
     expect(text(err)).toMatch(/Aufruf/);
   });
 
+  it("nimmt --captions an und startet den Lauf", async () => {
+    const dir = await tempProject(beispiel([
+      block({ tts: { file: "audio/tts/b001.wav", duration: 5, hash: "h", generated_at: "x" } }),
+    ]));
+    const { calls, run } = recordingRun();
+
+    const code = await runRender([dir, "--captions"], { run });
+
+    // Der eingehakte Prozess scheitert; wichtig ist, dass der Schalter kein
+    // Bedienfehler ist, der Lauf startet und ohne Wortzeiten gewarnt wird.
+    expect(code).toBe(1);
+    expect(text(err)).toContain("ffmpeg scheiterte");
+    expect(text(err)).not.toMatch(/Aufruf/);
+    expect(text(warning)).toMatch(/Untertitel/);
+    expect(calls.length).toBeGreaterThan(0);
+  });
+
   it("meldet ein fehlendes Projekt als Fehler", async () => {
     const leer = await mkdtemp(join(tmpdir(), "vw-commands-"));
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  concatListLine, musicMixFilter, outroFilter, segmentFilter, voiceFilter,
+  concatListLine, filterPath, musicMixFilter, outroFilter, segmentFilter, voiceFilter,
 } from "../src/lib/ffargs.js";
 import type { AudioSegment, VideoSegment } from "../src/lib/renderplan.js";
 
@@ -9,6 +9,7 @@ function segment(over: Partial<VideoSegment> = {}): VideoSegment {
   return {
     blockId: "b001",
     kind: "take",
+    sourceId: "s01",
     sourceFile: "sources/s01/raw.mp4",
     ranges: [[0, 3], [5, 10]],
     freezeAt: null,
@@ -120,5 +121,11 @@ describe("outroFilter", () => {
 describe("concatListLine", () => {
   it("maskiert Apostrophe und nutzt Schraegstriche", () => {
     expect(concatListLine("C:\\a b\\it's.mp4")).toBe("file 'C:/a b/it'\\''s.mp4'");
+  });
+});
+
+describe("filterPath", () => {
+  it("macht aus einem Windows-Pfad ein maskiertes Filterargument", () => {
+    expect(filterPath("C:\\out\\captions.ass")).toBe("'C\\:/out/captions.ass'");
   });
 });

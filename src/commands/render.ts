@@ -9,20 +9,25 @@ export interface RenderCommandDeps {
 /** Die geprueften Argumente von `render`; null bedeutet Bedienfehler. */
 interface RenderArgs {
   dir: string;
+  captions: boolean;
   allowOverflow: boolean;
   allowIncomplete: boolean;
 }
 
 /**
- * Liest Ordner und die Schalter `--allow-overflow` und `--allow-incomplete`.
- * Unbekannte Schalter sind ein Bedienfehler (null), kein stilles Ignorieren.
+ * Liest Ordner und die Schalter `--captions`, `--allow-overflow` und
+ * `--allow-incomplete`. Unbekannte Schalter sind ein Bedienfehler (null),
+ * kein stilles Ignorieren.
  */
 function parseRenderArgs(args: string[]): RenderArgs | null {
   const positionals: string[] = [];
+  let captions = false;
   let allowOverflow = false;
   let allowIncomplete = false;
   for (const arg of args) {
-    if (arg === "--allow-overflow") {
+    if (arg === "--captions") {
+      captions = true;
+    } else if (arg === "--allow-overflow") {
       allowOverflow = true;
     } else if (arg === "--allow-incomplete") {
       allowIncomplete = true;
@@ -34,7 +39,7 @@ function parseRenderArgs(args: string[]): RenderArgs | null {
   }
   const [dir] = positionals;
   if (positionals.length !== 1 || dir === undefined) return null;
-  return { dir, allowOverflow, allowIncomplete };
+  return { dir, captions, allowOverflow, allowIncomplete };
 }
 
 function errorText(error: unknown): string {
@@ -42,23 +47,28 @@ function errorText(error: unknown): string {
 }
 
 /**
- * `render <ordner> [--allow-overflow] [--allow-incomplete]`: rendert das
- * Projekt zum fertigen Video. Ueberlaenge und unfertige Bloecke verweigert
- * der Lauf, solange sie nicht ausdruecklich erlaubt sind; mit dem Schalter
- * rendert er und warnt.
+ * `render <ordner> [--captions] [--allow-overflow] [--allow-incomplete]`:
+ * rendert das Projekt zum fertigen Video. Ueberlaenge und unfertige Bloecke
+ * verweigert der Lauf, solange sie nicht ausdruecklich erlaubt sind; mit dem
+ * Schalter rendert er und warnt. Mit --captions brennen die Wortzeiten als
+ * Untertitel; fehlen sie, wird nur gewarnt.
  */
 export async function runRender(args: string[], deps: RenderCommandDeps = {}): Promise<number> {
   const parsed = parseRenderArgs(args);
   if (parsed === null) {
     console.error(
-      "Aufruf: videowizard render <ordner> [--allow-overflow] [--allow-incomplete]",
+      "Aufruf: videowizard render <ordner> [--captions] [--allow-overflow] [--allow-incomplete]",
     );
     return 2;
   }
   try {
     const output = await renderProject(
       parsed.dir,
-      { allowOverflow: parsed.allowOverflow, allowIncomplete: parsed.allowIncomplete },
+      {
+        allowOverflow: parsed.allowOverflow,
+        allowIncomplete: parsed.allowIncomplete,
+        captions: parsed.captions,
+      },
       { run: deps.run },
     );
     console.log(`Fertig: ${output}`);

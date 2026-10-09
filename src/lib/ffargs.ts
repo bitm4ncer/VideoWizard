@@ -112,3 +112,16 @@ export function concatListLine(absolutePath: string): string {
   const normalised = absolutePath.replace(/\\/g, "/").replace(/'/g, "'\\''");
   return `file '${normalised}'`;
 }
+
+/**
+ * Einen Pfad als Argument einer Filterkette maskieren: Schraegstriche statt
+ * Backslashes, der Doppelpunkt der Laufwerksangabe als `\:`, das Ganze in
+ * einfachen Anfuehrungszeichen (der erprobte Weg aus der VideoPipeline).
+ */
+export function filterPath(absolutePath: string): string {
+  const normalised = absolutePath
+    .replace(/\\/g, "/")
+    .replace(/'/g, "\\'")
+    .replace(/:/g, "\\:");
+  return `'${normalised}'`;
+}

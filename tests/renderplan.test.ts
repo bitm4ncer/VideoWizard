@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { buildRenderPlan } from "../src/lib/renderplan.js";
+import { buildRenderPlan, mapWordsToOutput } from "../src/lib/renderplan.js";
 import { CURRENT_SCHEMA } from "../src/lib/project.js";
+import type { TranscriptWord } from "../src/lib/providers/transcript.js";
+import type { VideoSegment } from "../src/lib/renderplan.js";
 import type { Block, Project } from "../src/lib/types.js";
 
 /** Ein fertiger Block; Abweichungen kommen ueber over. */
@@ -160,5 +162,61 @@ describe("buildRenderPlan", () => {
     expect(plan.format).toEqual({ fps: 30, width: 1080, height: 1920 });
     expect(plan.music).toBeNull();
     expect(plan.outro).toBeNull();
+  });
+});
+
+describe("mapWordsToOutput", () => {
+  /** Ein Bildabschnitt mit Schnitt; Abweichungen kommen ueber over. */
+  function segment(over: Partial<VideoSegment> = {}): VideoSegment {
+    return {
+      blockId: "b001",
+      kind: "take",
+      sourceId: "s01",
+      sourceFile: "sources/s01/raw.mp4",
+      ranges: [[0, 3], [5, 10]],
+      freezeAt: null,
+      speed: 1,
+      freeze: 0,
+      duration: 8,
+      ...over,
+    };
+  }
+
+  it("schiebt Woerter hinter dem Schnitt vor und laesst Woerter im Schnitt entfallen", () => {
+    const words: TranscriptWord[] = [
+      { start: 1, end: 2, text: "vor" },
+      { start: 3.5, end: 4.5, text: "im schnitt" },
+      { start: 6, end: 7, text: "dahinter" },
+    ];
+
+    // Der entfernte Schnitt [3, 5] ist 2 s lang; das Wort dahinter rutscht von
+    // 6 auf 4. Das Wort im Schnitt hat keinen verbleibenden Bereich.
+    expect(mapWordsToOutput(segment(), words)).toEqual([
+      { start: 1, end: 2, text: "vor" },
+      { start: 4, end: 5, text: "dahinter" },
+    ]);
+  });
+
+  it("kuerzt ein Wort, das in den entfernten Schnitt hineinreicht", () => {
+    const words: TranscriptWord[] = [{ start: 2.8, end: 5.2, text: "grenzfall" }];
+
+    expect(mapWordsToOutput(segment(), words)).toEqual([
+      { start: 2.8, end: 3.2, text: "grenzfall" },
+    ]);
+  });
+
+  it("teilt die Zeiten durch das Tempo", () => {
+    const words: TranscriptWord[] = [{ start: 6, end: 7, text: "dahinter" }];
+    const [wort] = mapWordsToOutput(segment({ speed: 0.9 }), words);
+
+    expect(wort!.start).toBeCloseTo(4.444, 3);
+    expect(wort!.end).toBeCloseTo(5.556, 3);
+    expect(wort!.text).toBe("dahinter");
+  });
+
+  it("liefert ohne verbleibende Bereiche keine Woerter", () => {
+    const words: TranscriptWord[] = [{ start: 0, end: 1, text: "x" }];
+
+    expect(mapWordsToOutput(segment({ ranges: [] }), words)).toEqual([]);
   });
 });

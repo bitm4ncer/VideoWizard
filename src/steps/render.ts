@@ -1,14 +1,16 @@
-import { copyFile, mkdir, readdir, stat, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, readdir, readFile, stat, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { probe, runFfmpeg } from "../lib/ffmpeg.js";
 import {
-  concatListLine, musicMixFilter, outroFilter, segmentFilter, voiceFilter,
+  concatListLine, filterPath, musicMixFilter, outroFilter, segmentFilter, voiceFilter,
 } from "../lib/ffargs.js";
+import { buildAss, planCaptions, type Cue } from "../lib/captions.js";
 import { buildRenderPlan, type RenderPlan, type VideoSegment } from "../lib/renderplan.js";
 import { loadProject } from "../lib/project.js";
 import { projectPaths } from "../lib/paths.js";
 import type { RunFn } from "../lib/ffmpeg.js";
 import type { Format } from "../lib/types.js";
+import type { TranscriptWord } from "../lib/providers/transcript.js";
 
 /** Zwischenclips und die fertige Tonspur liegen hier (bewaehrt in der VideoPipeline). */
 const CACHE_DIR = join(".cache", "render");
@@ -61,6 +63,31 @@ async function fileExists(file: string): Promise<boolean> {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") return false;
     throw error;
   }
+}
+
+/**
+ * Die Wortzeiten einer Quelle. Fehlt die Datei, bleibt die Quelle ohne Cues;
+ * eine kaputte Datei ist ein Fehler, kein stiller Ausfall.
+ */
+async function loadWords(projectDir: string, sourceId: string): Promise<TranscriptWord[]> {
+  const file = join(projectPaths(projectDir).sourcesDir, sourceId, "words.json");
+  let raw: string;
+  try {
+    raw = await readFile(file, "utf8");
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return [];
+    throw error;
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw) as unknown;
+  } catch (error) {
+    throw new Error(`Wortdatei ist kein gueltiges JSON: ${file}`, { cause: error });
+  }
+  if (!Array.isArray(parsed)) {
+    throw new Error(`Wortdatei ist keine Liste: ${file}`);
+  }
+  return parsed as TranscriptWord[];
 }
 
 /** Einen Block als Zwischenclip rendern; still haelt einen einzelnen Frame. */
@@ -138,6 +165,8 @@ export interface RenderOptions {
   allowOverflow?: boolean;
   /** Unfertige Bloecke (Text oder Ton fehlt) bewusst auslassen statt abzubrechen. */
   allowIncomplete?: boolean;
+  /** Wortzeiten als Untertitel brennen; ohne sie laeuft der Lauf ohne. */
+  captions?: boolean;
 }
 
 /**
@@ -150,9 +179,11 @@ export interface RenderDeps {
 
 /**
  * Fuehrt den Render-Plan aus: Bloecke schneiden, zusammenfuegen, Ton mischen,
- * Outro anhaengen. Vor dem Schreiben wird die Projektdatei daneben gesichert.
- * Eine fehlende Musikdatei bricht ab, bevor etwas laeuft; ein fehlendes Outro
- * wird nur gemeldet und der Lauf rendert ohne Outro.
+ * Untertitel brennen, Outro anhaengen. Vor dem Schreiben wird die Projektdatei
+ * daneben gesichert. Eine fehlende Musikdatei bricht ab, bevor etwas laeuft;
+ * ein fehlendes Outro wird nur gemeldet und der Lauf rendert ohne Outro.
+ * Mit captions brennen die Wortzeiten als ASS; fehlen sie, wird gewarnt und
+ * ohne Untertitel gerendert.
  */
 export async function renderProject(
   projectDir: string,
@@ -192,6 +223,27 @@ export async function renderProject(
       outroFile = file;
     } else {
       console.warn(`Warnung: Outro fehlt (${outro.file}); der Lauf rendert ohne Outro.`);
+    }
+  }
+
+  // Untertitel vorbereiten, bevor ein Prozess laeuft: die Wortdatei jeder
+  // Quelle wird einmal gelesen; fehlende Wortzeiten sind eine Warnung.
+  let cues: Cue[] = [];
+  if (opts.captions === true) {
+    const sourceIds = new Set(
+      plan.video
+        .filter((segment) => segment.kind === "take")
+        .map((segment) => segment.sourceId),
+    );
+    const wordsBySource = new Map<string, TranscriptWord[]>();
+    for (const sourceId of sourceIds) {
+      wordsBySource.set(sourceId, await loadWords(projectDir, sourceId));
+    }
+    cues = planCaptions(plan.video, wordsBySource);
+    if (cues.length === 0) {
+      console.warn(
+        "Warnung: Keine Wortzeiten fuer Untertitel gefunden; der Lauf rendert ohne Untertitel.",
+      );
     }
   }
 
@@ -253,15 +305,33 @@ export async function renderProject(
     "-c:a", "aac", "-b:a", "256k", "-ar", "48000", "-shortest", main,
   ], run);
 
-  // 6. Outro anhaengen und final encodieren
+  // 6. Untertitel brennen: eine eigene Stufe vor dem Outro, der Ton bleibt.
+  let finalInput = main;
+  if (cues.length > 0) {
+    const assFile = join(outDir, "captions.ass");
+    await writeFile(assFile, buildAss(cues, {
+      width: plan.format.width,
+      height: plan.format.height,
+    }), "utf8");
+    finalInput = join(cacheDir, "main-captions.mp4");
+    await runFfmpeg([
+      "-y", "-i", main,
+      "-vf", `subtitles=${filterPath(assFile)}`,
+      "-c:v", "libx264", "-preset", "veryfast", "-crf", "14", "-pix_fmt", "yuv420p",
+      "-c:a", "copy",
+      finalInput,
+    ], run);
+  }
+
+  // 7. Outro anhaengen und final encodieren
   const existing = await readdir(outDir).catch(() => [] as string[]);
   const outputName = nextOutputName(existing, project.id);
   const output = join(outDir, outputName);
 
-  const base = ["-y", "-i", main];
+  const base = ["-y", "-i", finalInput];
   if (outro !== null && outroFile !== null) {
     const normalisiert = await normalisedOutro(outroFile, plan.format, cacheDir, run);
-    const mainInfo = await probe(main, run);
+    const mainInfo = await probe(finalInput, run);
     const crossfade = outro.crossfade ?? DEFAULT_CROSSFADE;
     base.push(
       "-i", normalisiert,
@@ -278,7 +348,7 @@ export async function renderProject(
     await runFfmpeg([...base, ...finalVideoArgs(false), output], run);
   }
 
-  // 7. Projektstand neben das Ergebnis sichern
+  // 8. Projektstand neben das Ergebnis sichern
   const { projectFile } = projectPaths(projectDir);
   await copyFile(projectFile, join(outDir, "project.snapshot.json"));
 

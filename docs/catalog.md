@@ -31,4 +31,5 @@ Bausteinen in `blocks/index.json`. Diese Datei wird nicht von Hand gepflegt.
 ## Bausteine
 
 - **beats-short-retention**: Retention-Struktur fuer Shorts: Hook, Confirm, Payoff, Loop oder CTA (Lizenz: MIT)
+- **ffmpeg-captions**: Wortzeiten als ASS-Untertitel brennen, Stilwerte aus der Safe-Zone (Lizenz: MIT)
 - **ffmpeg-loudnorm**: Loudness nach EBU R128: Stimme auf -16, Endmischung auf -14 LUFS (Lizenz: MIT)
