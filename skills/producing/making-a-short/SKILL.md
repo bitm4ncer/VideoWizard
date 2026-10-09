@@ -51,6 +51,14 @@ zusammengefasst werden.
 
 `vz status <ordner>` zeigt jederzeit, welche Bloecke noch offen sind.
 
+## Finish fuer Menschen
+
+Fuer die Version, die ein Mensch in Diffusion Studio feinschleifen will:
+`vz handoff <ordner>` erzeugt den Uebergabeordner (Vorgabe
+`handoff/diffusion-studio`; `--out <pfad>` woandershin, `--force` ersetzt
+einen belegten). Einweg: Nach dem Hand-off ist Diffusion Studio der Master;
+`project.json` bleibt Schnittplan-Snapshot. Details: `handoff-to-diffusion`.
+
 ## Was es heute noch nicht gibt
 
 - **`--fix` im Doctor.** Ein fehlendes Werkzeug wird von Hand installiert.

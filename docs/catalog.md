@@ -18,6 +18,7 @@ Bausteinen in `blocks/index.json`. Diese Datei wird nicht von Hand gepflegt.
 
 ### producing
 
+- **handoff-to-diffusion**: Use when a finished cut should be polished by a human in Diffusion Studio, or when a hand-off folder, its one-way rule and its limits must be understood.
 - **making-a-short**: Use when a planned short has to be produced, or when it is unclear which capability supplies transcript, voice, music, editing or captions.
 
 ### tools

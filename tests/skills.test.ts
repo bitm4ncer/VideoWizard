@@ -15,6 +15,7 @@ const verlangteSkills = [
   "skills/planning/reference-analysis/SKILL.md",
   "skills/planning/storyboarding/SKILL.md",
   "skills/producing/making-a-short/SKILL.md",
+  "skills/producing/handoff-to-diffusion/SKILL.md",
   "skills/tools/tool-ffmpeg/SKILL.md",
   "skills/tools/tool-ace-step/SKILL.md",
   "skills/tools/tool-elevenlabs/SKILL.md",

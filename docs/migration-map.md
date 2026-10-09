@@ -1,6 +1,6 @@
 # Migrationskarte: VideoPipeline nach VideoWizard
 
-*Stand: 09.10.2026. Handgepflegt, kein Generator; der Test prueft nur, dass die
+*Stand: 10.10.2026. Handgepflegt, kein Generator; der Test prueft nur, dass die
 genannten Befehle und Skills existieren.*
 
 Quelle ist die VideoPipeline unter `C:\GitHub\VideoPipeline`. Sie bleibt
@@ -11,6 +11,9 @@ Drei Zustaende:
 - `uebertragen`: in VideoWizard gebaut, mit Beleg im Repo.
 - `offen`: noch nicht gebaut.
 - `bewusst nicht`: verworfen, mit Begruendung.
+
+Davon abgesetzt `uebertragen (Einweg)`: gebaut, aber ohne Rueckweg; nach der
+Uebergabe fuehrt das Zielwerkzeug.
 
 ## Uebertragen
 
@@ -27,6 +30,7 @@ Drei Zustaende:
 | Vorbedingungen pruefen (die ping-Laeufe der VideoPipeline) | `vz doctor` meldet je Faehigkeit: vorhanden, automatisch installierbar, nur von Hand oder Schluessel noetig | `uebertragen` | `src/lib/capabilities.ts`, `src/commands/doctor.ts`, `tests/doctor.test.ts` |
 | Zulieferer-Prinzip: fal, Cavalry und After Effects legen eine Datei plus Beidatei ab und montieren nichts | Anbieter-Vertraege und Bausteine: ein Anbieter liefert Bytes, der Kern legt ab und traegt nur die Datei in `project.json` ein; Bausteine deklarieren unter `requires`, was sie brauchen | `uebertragen` | Spezifikation Abschnitt 3; `src/lib/providers/music.ts`, `src/lib/providers/voice.ts`, `src/lib/blocks.ts`; Test: `tests/blocks.test.ts` |
 | Skills als Arbeitsablauf und Zulieferer-Wissen (`.claude/skills/`) | Portabler Skill-Baum unter `skills/` mit den Gruppen meta, planning, producing, tools und reference; Katalog `docs/catalog.md`; Einstieg `skills/meta/using-videowizard` | `uebertragen` | `tests/skills.test.ts`, `tests/catalog.test.ts`, `docs/catalog.md` |
+| Diffusion-Studio-Anbindung: Ausleiter `scripts/ds-export.mjs`, Editor ueber `dapi` geprueft | `vz handoff` erzeugt einen Diffusion-Studio-Projektordner (Einweg); danach ist DS der Master, `project.json` bleibt Schnittplan-Snapshot; Skill `skills/producing/handoff-to-diffusion` | `uebertragen (Einweg)` | Spike `docs/research/2026-10-09-diffusion-studio-spike.md`; Live-Pruefung vom 10.10.2026 (DS oeffnet das Paket, `check` ohne Befund, `capture` stimmt); Tests: `tests/handoff.test.ts` |
 
 ## Offen
 
@@ -37,7 +41,6 @@ Drei Zustaende:
 | Auto-Zoom aus Mausdaten: Zoom je Block aus Klicks und dem `screen`-Feld | nicht begonnen; kein Zoom-Feld im Projektformat, kein Rezept | `offen` | VideoPipeline `docs/roadmap.md` Phase 5; keine Fundstelle in VideoWizard |
 | Mitschreiber und OBS-Anbindung: ein Befehl startet Aufnahme und Zeiger-Mitschnitt mit einem Nullpunkt | nicht begonnen; die Spezifikation fuehrt Aufnahme ueber OBS als geplante Faehigkeit, es gibt weder Mitschreiber noch WebSocket-Anbindung | `offen` | Spezifikation Abschnitt 4; VideoPipeline `docs/roadmap.md` Phase 5 |
 | Showreel: Ordner voller Clips sichten, Musik dazu, drei Minuten schneiden | keine Entsprechung | `offen` | VideoPipeline `docs/roadmap.md` Phase 6 |
-| Diffusion-Studio-Anbindung: Ausleiter `scripts/ds-export.mjs`, Editor ueber `dapi` geprueft | keine Entsprechung, nicht begonnen | `offen` | VideoPipeline `docs/roadmap.md` Phase 4; `C:\GitHub\VideoPipeline\scripts\ds-export.mjs` |
 | Lokaler Whisper-Lauf fuer Transkripte | Rezept und Anbieter liegen vor (`skills/tools/tool-whisper`, `src/lib/providers/whisper.ts`), aber **nicht gegen ein echtes Binary geprueft** | `offen` | `skills/tools/tool-whisper` und `src/lib/providers/whisper.ts` sagen "nachgeschlagen, nicht gegengeprueft" |
 
 ## Bewusst nicht
