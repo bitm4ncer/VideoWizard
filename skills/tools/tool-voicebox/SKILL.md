@@ -27,11 +27,15 @@ nicht. Danach `vz doctor` erneut laufen lassen.
 In `project.json` waehlt `capabilities.voice` den Anbieter:
 
 - `provider`: `voicebox`.
-- `options.base_url`: Vorgabe `http://127.0.0.1:17493`.
+- `options.base_url`: **Pflicht fuer `speak`**; Wert
+  `http://127.0.0.1:17493`. Fehlt sie, wirft der Anbieter mit klarer Meldung.
+  Der Doctor braucht keine Projektangabe.
 - `options.profile_name`: Name des geklonten Profils. **Pflicht fuer `speak`**;
   fehlt er, wirft der Anbieter mit klarer Meldung. Der Doctor braucht ihn
   nicht.
-- `options.language`: Vorgabe `en`.
+- `options.language`: Rueckfall fuer Aufrufe ohne eigene Sprache; `vz voice`
+  uebergibt immer `project.language.output`, das gewinnt. Ohne beides gilt
+  `en`.
 - `options.engine` (etwa `qwen`) und `options.model_size` (etwa `1.7B`):
   optional, sonst entscheidet der Server.
 
