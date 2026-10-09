@@ -442,8 +442,9 @@ describe("resolveVoiceProvider: die Wahl", () => {
   });
 
   it("wirft bei unbekanntem Namen und nennt Name und bekannte Anbieter", () => {
-    const unknown = voice({ provider: "elevenlabs" });
-    expect(() => resolveVoiceProvider(unknown)).toThrow(/"elevenlabs"/);
+    const unknown = voice({ provider: "chatterbox" });
+    expect(() => resolveVoiceProvider(unknown)).toThrow(/"chatterbox"/);
     expect(() => resolveVoiceProvider(unknown)).toThrow(/voicebox/);
+    expect(() => resolveVoiceProvider(unknown)).toThrow(/elevenlabs/);
   });
 });

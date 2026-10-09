@@ -2,16 +2,20 @@
  * Der gemeinsame Vertrag der Sprachquellen (Spezifikation Abschnitt 4).
  *
  * Ein Workflow kennt nur die Faehigkeit "Stimme"; welcher Anbieter sie
- * erfuellt, steht in `project.capabilities.voice`. Heute gibt es nur
- * Voicebox. Weitere Anbieter implementieren denselben Vertrag.
+ * erfuellt, steht in `project.capabilities.voice`. Voicebox und ElevenLabs
+ * implementieren denselben Vertrag.
  */
 
 import type { Project } from "../types.js";
 import { toVoiceboxOptions, voiceboxProvider } from "./voicebox.js";
+import { toElevenLabsVoiceOptions, elevenlabsVoiceProvider } from "./elevenlabs.js";
 
 // Die Voicebox-Quelle liegt in voicebox.ts; hier gilt der gemeinsame Vertrag.
 export { toVoiceboxOptions, voiceboxProvider } from "./voicebox.js";
 export type { VoiceboxOptions } from "./voicebox.js";
+// Die ElevenLabs-Quelle liegt in elevenlabs.ts; hier gilt der gemeinsame Vertrag.
+export { toElevenLabsVoiceOptions, elevenlabsVoiceProvider } from "./elevenlabs.js";
+export type { ElevenLabsVoiceOptions } from "./elevenlabs.js";
 
 /** Wie das Netzwerk angefasst wird; einhakbar fuer Tests. */
 export type FetchLike = (input: string, init?: RequestInit) => Promise<Response>;
@@ -28,6 +32,8 @@ export interface VoiceDeps {
   now?: () => number;
   /** Hoechste Wartezeit eines Laufs in Millisekunden; die Vorgabe setzt der Anbieter. */
   maxWaitMs?: number;
+  /** Die Umgebung fuer Geheimnisse; Vorgabe: process.env. Einhakbar fuer Tests. */
+  env?: Record<string, string | undefined>;
 }
 
 /** Echte Zeichenzeiten einer Stimme; je Zeichen Start und Ende in Sekunden. */
@@ -62,6 +68,7 @@ type VoiceBuilder = (options: Record<string, unknown>, deps: VoiceDeps) => Voice
 /** Die bekannten Sprach-Anbieter. Der Schluessel ist `capabilities.voice.provider`. */
 const builders: Record<string, VoiceBuilder> = {
   voicebox: (options, deps) => voiceboxProvider(toVoiceboxOptions(options), deps),
+  elevenlabs: (options, deps) => elevenlabsVoiceProvider(toElevenLabsVoiceOptions(options), deps),
 };
 
 /**
