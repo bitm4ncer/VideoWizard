@@ -22,7 +22,8 @@ import type { TranscriptWord } from "./providers/transcript.js";
  * Folgt ein take-Block der Sync-Logik des Renderers (computeFit,
  * unabhaengig vom gespeicherten fit-Etikett), spiegelt der Aufbau den
  * Render-Plan: behaltene Bereiche als getrimmte Videos in einer sequence,
- * Haltebilder als extrahierte Frames, Captions auf der Ausgangsachse.
+ * Haltebilder als extrahierte Frames, Captions auf der Ausgangsachse und
+ * Ton auf Blocklaenge gekappt.
  */
 
 /** Die Medien einer Handoff-Fassung; alle Pfade absolut mit Schraegstrichen. */
@@ -115,8 +116,8 @@ function fitSegment(block: Block, fit: FitResult, sourceFile: string): VideoSegm
  * dabei das volle Bildfenster und die Zieldauer. Ohne Sync (kein Text oder
  * keine Vertonung) bleibt es beim einen video ueber das Blockfenster. Der
  * Quellton ist stumm, weil der Schnittplan ihn nicht uebernimmt. still ein
- * image des extrahierten Frames, dazu audio und captions, wo Medien
- * vorliegen. Overlays sind in v1 ausgenommen.
+ * image des extrahierten Frames, dazu audio auf Blocklaenge gekappt und
+ * captions, wo Medien vorliegen. Overlays sind in v1 ausgenommen.
  */
 export function buildIndexTsx(project: Project, media: HandoffMedia): string {
   const { width, height } = project.format;
@@ -137,8 +138,8 @@ export function buildIndexTsx(project: Project, media: HandoffMedia): string {
       `fill="black"${active}>`,
     );
     const fit = fitForBlock(block);
-    if (fit !== null) {
-      const segment = fitSegment(block, fit, picture);
+    const segment = fit === null ? null : fitSegment(block, fit, picture);
+    if (segment !== null) {
       if (segment.ranges.length === 0) {
         throw new Error(
           `Hand-off fuer Block ${block.id}: kein verbleibender Bildbereich.`,
@@ -189,7 +190,15 @@ export function buildIndexTsx(project: Project, media: HandoffMedia): string {
     }
     const audio = media.audio.get(block.id);
     if (audio !== undefined) {
-      lines.push(`        <audio id=${attr(`${block.id}-audio`)} src=${attr(audio)} />`);
+      // Encoder-Padding macht echte Dateien laenger als tts.duration; ohne
+      // Ende schiebt der Ton die Szene hinter das Bild und DS meldet
+      // Schwarz. Die Blocklaenge ist die Zieldauer des Fit-Pfads, sonst die
+      // rohe Stimmlaenge.
+      const length = segment?.duration ?? block.tts?.duration ?? stillDuration(block);
+      lines.push(
+        `        <audio id=${attr(`${block.id}-audio`)} src=${attr(audio)} ` +
+        `end={${num(length)}} />`,
+      );
     }
     const captions = media.captions.get(block.id);
     if (captions !== undefined) {

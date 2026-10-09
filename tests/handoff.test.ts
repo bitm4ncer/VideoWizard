@@ -255,15 +255,21 @@ describe("buildIndexTsx", () => {
       source_in: 12,
       source_out: 20,
       freeze_at: 14.25,
+      pause_after: 0.5,
       tts: { file: "audio/tts/b002.wav", duration: 4, hash: "h", generated_at: "2026-10-08" },
     });
     const tsx = buildIndexTsx(project({ blocks: [still] }), media({
       pictures: new Map([["b002", "C:/projekt/handoff/diffusion-studio/media/b002.png"]]),
+      audio: new Map([["b002", "C:/projekt/audio/tts/b002.wav"]]),
     }));
 
     expect(tsx).toContain(
       '<image id="b002-image" src="C:/projekt/handoff/diffusion-studio/media/b002.png" ' +
-      "end={4} width={1080} height={1920} />",
+      "end={4.5} width={1080} height={1920} />",
+    );
+    // Ein still hat keinen Fit-Pfad; die rohe Stimmlaenge kappt das Padding.
+    expect(tsx).toContain(
+      '<audio id="b002-audio" src="C:/projekt/audio/tts/b002.wav" end={4} />',
     );
     expect(tsx).not.toContain("<video");
     // Ein Bild traegt keinen Quellton; muted gehoert nur ans video.
@@ -285,12 +291,18 @@ describe("buildIndexTsx", () => {
     expect(tsx).toContain("end={8} ");
   });
 
-  it("haengt nur bei vorhandener Vertonung ein audio-Element an", () => {
-    const tsx = buildIndexTsx(project(), media({
+  it("kappt ein audio-Element auf die Blocklaenge der Sync-Logik", () => {
+    // Echte Dateien sind wegen Encoder-Padding laenger als tts.duration;
+    // ohne Ende schiebt der Ton die Szene hinter das Bild (check: Schwarz).
+    // Die Blocklaenge ist die Zieldauer, nicht die rohe Stimmlaenge.
+    const tsx = buildIndexTsx(project({ blocks: [block({ pause_after: 0.5 })] }), media({
       audio: new Map([["b001", "C:/projekt/audio/tts/b001.wav"]]),
     }));
 
-    expect(tsx).toContain('<audio id="b001-audio" src="C:/projekt/audio/tts/b001.wav" />');
+    expect(tsx).toContain('<sequence id="b001-sequence" end={5.5}>');
+    expect(tsx).toContain(
+      '<audio id="b001-audio" src="C:/projekt/audio/tts/b001.wav" end={5.5} />',
+    );
   });
 
   it("haengt nur bei vorhandenen Untertiteln ein captions-Element an", () => {
@@ -361,7 +373,9 @@ describe("renderHandoff", () => {
     expect(index).toContain("sourceIn={0} sourceOut={5} start={0}");
     expect(index).not.toContain("sourceOut={10}");
     expect(index).toContain("muted />");
-    expect(index).toContain('<audio id="b001-audio"');
+    expect(index).toContain(
+      `<audio id="b001-audio" src="${posix(join(dir, "audio", "tts", "b001.wav"))}" end={5} />`,
+    );
 
     const pkg = JSON.parse(await readFile(join(target, "package.json"), "utf8")) as {
       name: string;
