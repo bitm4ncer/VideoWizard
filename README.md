@@ -26,4 +26,4 @@ Codex steht in `docs/install.md`.
 Etappen 1 bis 3 sind fertig: Geruest, Projektformat, Doctor und Bausteine, der
 ffmpeg-Kern (ingest, Transkript, Bloecke, Stimme, Musik, Render) und weitere
 Anbieter. Etappe 4 (MCP-Server und Huellen fuer Claude Code, Codex und
-OpenCode) ist in Arbeit. Etappe 5 (Improvement Loop) folgt.
+OpenCode) ist fertig. Etappe 5 (Improvement Loop) folgt.

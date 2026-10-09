@@ -45,7 +45,8 @@ Skill-Einrichtung noetig.
 
 **Ohne Plugin.** Das Skills-Verzeichnis in der `opencode.json` eintragen
 (V2: `"skills": ["<repo>/skills"]`, V1 stattdessen
-`{"skills": {"paths": ["<repo>/skills"]}}`) und dazu den MCP-Block ergaenzen:
+`{"skills": {"paths": ["<repo>/skills"]}}`). Der MCP-Block sieht je Fassung
+anders aus; V2 legt die Server unter `mcp.servers` ab:
 
 ```json
 {
@@ -55,6 +56,19 @@ Skill-Einrichtung noetig.
         "type": "local",
         "command": ["npm", "--silent", "--prefix", "<repo>", "run", "mcp"]
       }
+    }
+  }
+}
+```
+
+V1 traegt den Servernamen direkt unter `mcp` ein:
+
+```json
+{
+  "mcp": {
+    "videowizard": {
+      "type": "local",
+      "command": ["npm", "--silent", "--prefix", "<repo>", "run", "mcp"]
     }
   }
 }
