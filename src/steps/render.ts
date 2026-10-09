@@ -8,6 +8,7 @@ import { buildAss, planCaptions, type Cue } from "../lib/captions.js";
 import { buildRenderPlan, type RenderPlan, type VideoSegment } from "../lib/renderplan.js";
 import { loadProject } from "../lib/project.js";
 import { projectPaths } from "../lib/paths.js";
+import { verifySources } from "./ingest.js";
 import type { RunFn } from "../lib/ffmpeg.js";
 import type { Format } from "../lib/types.js";
 import type { TranscriptWord } from "../lib/providers/transcript.js";
@@ -180,10 +181,12 @@ export interface RenderDeps {
 /**
  * Fuehrt den Render-Plan aus: Bloecke schneiden, zusammenfuegen, Ton mischen,
  * Untertitel brennen, Outro anhaengen. Vor dem Schreiben wird die Projektdatei
- * daneben gesichert. Eine fehlende Musikdatei bricht ab, bevor etwas laeuft;
- * ein fehlendes Outro wird nur gemeldet und der Lauf rendert ohne Outro.
- * Mit captions brennen die Wortzeiten als ASS; fehlen sie, wird gewarnt und
- * ohne Untertitel gerendert.
+ * daneben gesichert. Vor dem Plan prueft der Lauf die Quellen; eine getauschte
+ * oder geaenderte Datei bricht ab, bevor ueberhaupt ein Prozess laeuft. Eine
+ * fehlende Musikdatei bricht ebenfalls ab, bevor etwas laeuft; ein fehlendes
+ * Outro wird nur gemeldet und der Lauf rendert ohne Outro. Mit captions brennen
+ * die Wortzeiten als ASS; fehlen sie, wird gewarnt und ohne Untertitel
+ * gerendert.
  */
 export async function renderProject(
   projectDir: string,
@@ -191,6 +194,9 @@ export async function renderProject(
   deps: RenderDeps = {},
 ): Promise<string> {
   const { run } = deps;
+  // Zuerst die Quellen pruefen: ein Schnitt auf getauschtem Material waere
+  // schlimmer als ein Abbruch.
+  await verifySources(projectDir);
   const project = await loadProject(projectDir);
   const plan = buildRenderPlan(project, opts);
   for (const warning of plan.warnings) console.warn(`Warnung: ${warning}`);

@@ -26,9 +26,10 @@ const CHECKSUM_BYTES = 8 * 1024 * 1024;
 
 /**
  * Fingerabdruck aus Dateigroesse und den ersten 8 MB, gekuerzt auf 32 Zeichen
- * (wie in der VideoPipeline). Reicht, um Vertauschungen zu erkennen.
+ * (wie in der VideoPipeline). Reicht, um Vertauschungen zu erkennen; auch die
+ * Quellenpruefung vor dem Render rechnet damit.
  */
-async function fileChecksum(file: string): Promise<string> {
+export async function sourceChecksum(file: string): Promise<string> {
   const info = await stat(file);
   const handle = await open(file, "r");
   try {
@@ -46,6 +47,34 @@ async function fileChecksum(file: string): Promise<string> {
       .slice(0, 32);
   } finally {
     await handle.close();
+  }
+}
+
+/**
+ * Prueft je Quelle, ob die abgelegte Datei noch zur gespeicherten Pruefsumme
+ * passt. Der Render ruft das vor dem Plan auf, damit kein Schnitt auf
+ * getauschtem Material sitzt; bei Abweichung bricht der Lauf mit Kennung,
+ * Beschriftung und Pfad der Quelle ab.
+ */
+export async function verifySources(projectDir: string): Promise<void> {
+  const project = await loadProject(projectDir);
+  for (const source of project.sources) {
+    const file = join(projectDir, source.file);
+    let current: string;
+    try {
+      current = await sourceChecksum(file);
+    } catch (error) {
+      throw new Error(
+        `Quelle ${source.id} (${source.label}) fehlt: ${source.file}`,
+        { cause: error },
+      );
+    }
+    if (current !== source.checksum) {
+      throw new Error(
+        `Quelle ${source.id} (${source.label}) hat sich geaendert: ${source.file}. ` +
+        "Der Schnitt wuerde auf falschem Material sitzen; bitte neu einlesen.",
+      );
+    }
   }
 }
 
@@ -142,7 +171,7 @@ export async function ingest(
     file: `sources/${id}/raw.mp4`,
     added: new Date().toISOString().slice(0, 10),
     duration: finalInfo.duration,
-    checksum: await fileChecksum(target),
+    checksum: await sourceChecksum(target),
     normalized,
   };
 

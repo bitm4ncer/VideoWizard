@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { createHash } from "node:crypto";
-import { mkdtemp, readFile, readdir, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { CURRENT_SCHEMA, loadProject, saveProject } from "../src/lib/project.js";
-import { ingest } from "../src/steps/ingest.js";
+import { ingest, sourceChecksum, verifySources } from "../src/steps/ingest.js";
 import type { RunFn, RunResult } from "../src/lib/ffmpeg.js";
 import type { Project } from "../src/lib/types.js";
 
@@ -317,5 +317,87 @@ describe("ingest", () => {
       .digest("hex")
       .slice(0, 32);
     expect(source.checksum).toBe(erwartet);
+  });
+});
+
+describe("sourceChecksum", () => {
+  it("rechnet ueber Dateigroesse und Inhalt, gekuerzt auf 32 Zeichen", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "vw-ingest-"));
+    const file = join(dir, "material.bin");
+    const bytes = Buffer.from("Pruefmaterial");
+    await writeFile(file, bytes);
+
+    const erwartet = createHash("sha256")
+      .update(String(bytes.length))
+      .update(bytes)
+      .digest("hex")
+      .slice(0, 32);
+    expect(await sourceChecksum(file)).toBe(erwartet);
+  });
+});
+
+describe("verifySources", () => {
+  /**
+   * Ein Projekt mit einer echten Quelle im Ordner; die Pruefsumme stammt von
+   * der Datei selbst und passt damit zum Inhalt.
+   */
+  async function projectWithSource(): Promise<{ dir: string; file: string }> {
+    const dir = await tempProject();
+    const file = join(dir, "sources", "s01", "raw.mp4");
+    await mkdir(join(dir, "sources", "s01"), { recursive: true });
+    await writeFile(file, "Material s01", "utf8");
+    const project = await loadProject(dir);
+    project.sources.push({
+      id: "s01",
+      label: "Kamera A",
+      file: "sources/s01/raw.mp4",
+      added: "2026-10-08",
+      duration: 5,
+      checksum: await sourceChecksum(file),
+      normalized: false,
+    });
+    await saveProject(dir, project);
+    return { dir, file };
+  }
+
+  it("laesst unveraenderte Quellen passieren", async () => {
+    const { dir } = await projectWithSource();
+
+    await expect(verifySources(dir)).resolves.toBeUndefined();
+  });
+
+  it("wirft bei geaenderter Datei mit Kennung, Beschriftung und Pfad", async () => {
+    const { dir, file } = await projectWithSource();
+    // Gleiche Groesse, anderer Inhalt: die Pruefsumme deckt den Inhalt.
+    await writeFile(file, "Ausgetauscht", "utf8");
+
+    const fehler = await verifySources(dir).then(
+      () => {
+        throw new Error("verifySources haette werfen muessen");
+      },
+      (error: Error) => error.message,
+    );
+
+    expect(fehler).toContain("s01");
+    expect(fehler).toContain("Kamera A");
+    expect(fehler).toContain("sources/s01/raw.mp4");
+    expect(fehler).toMatch(/geaendert/);
+  });
+
+  it("meldet eine fehlende Quelle mit Kennung, Beschriftung und Pfad", async () => {
+    const { dir, file } = await projectWithSource();
+    await rm(file);
+
+    const fehler = await verifySources(dir).then(
+      () => {
+        throw new Error("verifySources haette werfen muessen");
+      },
+      (error: Error) => error.message,
+    );
+
+    expect(fehler).toContain("s01");
+    expect(fehler).toContain("Kamera A");
+    expect(fehler).toContain("sources/s01/raw.mp4");
+    expect(fehler).toMatch(/fehlt/);
   });
 });

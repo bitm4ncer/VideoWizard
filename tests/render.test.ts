@@ -1,7 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
+import { createHash } from "node:crypto";
 import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { nextOutputName, renderProject } from "../src/steps/render.js";
 import { CURRENT_SCHEMA, saveProject } from "../src/lib/project.js";
 import type { RunFn, RunResult } from "../src/lib/ffmpeg.js";
@@ -54,10 +55,35 @@ function project(over: Partial<Project> = {}): Project {
   };
 }
 
-/** Ein frischer Projektordner mit Wahrheitsdatei. */
+/**
+ * Pruefsumme wie der Ingest: Sha256 ueber Dateigroesse und Inhalt, auf
+ * 32 Zeichen gekuerzt. Im Test eigenstaendig gerechnet; die Vorlagen bleiben
+ * deutlich unter den 8 MB des Ingests.
+ */
+async function checksumFor(file: string): Promise<string> {
+  const bytes = await readFile(file);
+  return createHash("sha256")
+    .update(String(bytes.length))
+    .update(bytes)
+    .digest("hex")
+    .slice(0, 32);
+}
+
+/**
+ * Ein frischer Projektordner mit Wahrheitsdatei. Jede Quelle liegt als Datei
+ * bereit und ihre Pruefsumme passt; sonst wuerde der Quellencheck den Lauf
+ * schon vor dem Plan abbrechen.
+ */
 async function tempProject(over: Partial<Project> = {}): Promise<string> {
   const dir = await mkdtemp(join(tmpdir(), "vw-render-"));
-  await saveProject(dir, project(over));
+  const p = project(over);
+  for (const source of p.sources) {
+    const file = join(dir, source.file);
+    await mkdir(dirname(file), { recursive: true });
+    await writeFile(file, `Material ${source.id}`, "utf8");
+    source.checksum = await checksumFor(file);
+  }
+  await saveProject(dir, p);
   return dir;
 }
 
@@ -193,6 +219,27 @@ describe("renderProject", () => {
     await expect(renderProject(dir, {}, { run }))
       .rejects.toThrow(/Musikdatei fehlt: musik\/bett\.mp3/);
 
+    expect(calls).toEqual([]);
+  });
+
+  it("bricht bei geaenderter Quelldatei mit Kennung, Beschriftung und Pfad ab, bevor ffmpeg laeuft", async () => {
+    const dir = await tempProject();
+    // Gleiche Groesse, anderer Inhalt: die Pruefsumme deckt den Inhalt.
+    await writeFile(join(dir, "sources", "s01", "raw.mp4"), "Ausgetauscht", "utf8");
+    const { calls, run } = fakeRun();
+
+    const fehler = await renderProject(dir, {}, { run }).then(
+      () => {
+        throw new Error("render haette werfen muessen");
+      },
+      (error: Error) => error.message,
+    );
+
+    expect(fehler).toContain("s01");
+    expect(fehler).toContain("Kamera A");
+    expect(fehler).toContain("sources/s01/raw.mp4");
+    expect(fehler).toMatch(/geaendert/);
+    // Weder ffprobe noch ffmpeg laufen.
     expect(calls).toEqual([]);
   });
 

@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { mkdir, mkdtemp, readFile, readdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { runIngest } from "../src/commands/ingest.js";
 import { runRender } from "../src/commands/render.js";
 import { runSegment } from "../src/commands/segment.js";
@@ -10,6 +10,7 @@ import { runVoice } from "../src/commands/voice.js";
 import { probeDuration } from "../src/lib/ffmpeg.js";
 import { ttsHash } from "../src/lib/hash.js";
 import { CURRENT_SCHEMA, loadProject, saveProject } from "../src/lib/project.js";
+import { sourceChecksum } from "../src/steps/ingest.js";
 import type { RunFn } from "../src/lib/ffmpeg.js";
 import type { TranscriptWord } from "../src/lib/providers/transcript.js";
 import type { VoiceProvider } from "../src/lib/providers/voice.js";
@@ -99,9 +100,19 @@ function beispiel(blocks: Block[] = [], over: Partial<Project> = {}): Project {
   };
 }
 
-/** Ein frischer Projektordner mit Wahrheitsdatei. */
+/**
+ * Ein frischer Projektordner mit Wahrheitsdatei. Jede Quelle liegt als Datei
+ * bereit und ihre Pruefsumme passt; sonst wuerde der Quellencheck im Render
+ * den Lauf schon vor dem Plan abbrechen.
+ */
 async function tempProject(project: Project): Promise<string> {
   const dir = await mkdtemp(join(tmpdir(), "vw-commands-"));
+  for (const source of project.sources) {
+    const file = join(dir, source.file);
+    await mkdir(dirname(file), { recursive: true });
+    await writeFile(file, `Material ${source.id}`, "utf8");
+    source.checksum = await sourceChecksum(file);
+  }
   await saveProject(dir, project);
   return dir;
 }
@@ -492,13 +503,14 @@ describe("runIngest", () => {
 
   it("weist unbekannte Schalter als Bedienfehler ab", async () => {
     const dir = await tempProject(beispiel());
+    const vorher = await loadProject(dir);
 
     const code = await runIngest([dir, "video.mp4", "--schnell"], { run: recordingRun().run });
 
     expect(code).toBe(2);
     expect(text(err)).toMatch(/Aufruf/);
     // Nichts angefasst: die Wahrheitsdatei bleibt unveraendert.
-    expect(await loadProject(dir)).toEqual(beispiel());
+    expect(await loadProject(dir)).toEqual(vorher);
   });
 
   it("nimmt --label an und meldet die neue Quelle", async () => {
