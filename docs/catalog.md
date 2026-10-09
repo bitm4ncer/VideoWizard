@@ -13,6 +13,7 @@ Bausteinen in `blocks/index.json`. Diese Datei wird nicht von Hand gepflegt.
 ### planning
 
 - **planning-short**: Use when planning a short video for Reels, Shorts or TikTok, or when a short needs a hook and a retention structure.
+- **reference-analysis**: Use when a loved reference video should become a reliable creative brief, or when a reference video needs measuring before planning.
 - **storyboarding**: Use when an approved beat structure should become a shot list, or when a video plan needs its visual theme and gates recorded.
 
 ### producing
