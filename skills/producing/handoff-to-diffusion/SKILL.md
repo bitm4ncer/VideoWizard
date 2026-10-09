@@ -38,6 +38,8 @@ legt ihn woandershin, `--force` ersetzt einen belegten Zielordner.
 
 - Overlays des Schnittplans.
 - Musik und Outro.
+- Fit-Schnitte der Sync-Logik: Pausenkuerzung, Tempo und Halte werden
+  nicht reproduziert.
 
 ## Einweg
 
@@ -48,6 +50,8 @@ stempelt beim Oeffnen eigene Felder; die gelieferten bleiben unberuehrt.
 
 ## Grenze
 
-Der Kern ist live verifiziert: Oeffnen, `check` ohne Befund und die
-Frames stimmen (Live-Pruefung 10.10.2026). Das Audio- und Captions-Mapping
-ist quellcodegetestet, noch nicht in der App live geprueft.
+Live verifiziert (10.10.2026): Oeffnen, `check` ohne Befund, der Trim der
+take-Frames und das Bild des still-Blocks; letzteres aber nur, soweit sich
+Standbilder live pruefen liessen, sonst zaehlt es wie der Rest.
+Quellcodegetestet, nicht in der App live geprueft: still-Bild (ohne
+Live-Pruefung), Audio und Captions.

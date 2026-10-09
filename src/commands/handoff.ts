@@ -17,8 +17,9 @@ interface HandoffArgs {
 
 /**
  * Liest Ordner, `--out <pfad>` und den Schalter `--force`. Unbekannte Schalter
- * und ein fehlender Wert hinter --out sind Bedienfehler (null), kein stilles
- * Ignorieren.
+ * und ein fehlender oder leerer Wert hinter --out sind Bedienfehler (null),
+ * kein stilles Ignorieren: `--out ""` wuerde sonst im Arbeitsverzeichnis
+ * landen.
  */
 function parseHandoffArgs(args: string[]): HandoffArgs | null {
   const positionals: string[] = [];
@@ -29,7 +30,7 @@ function parseHandoffArgs(args: string[]): HandoffArgs | null {
     if (arg === undefined) continue;
     if (arg === "--out") {
       const value = args[index + 1];
-      if (value === undefined || value.startsWith("-")) return null;
+      if (value === undefined || value === "" || value.startsWith("-")) return null;
       out = value;
       index += 1;
     } else if (arg === "--force") {

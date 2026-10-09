@@ -303,7 +303,10 @@ describe("renderHandoff", () => {
       "`project.json` bleibt Schnittplan-Snapshot.",
     );
     expect(readme).toContain(`diffusion open ${posix(target)}`);
-    expect(readme).toContain("Overlays");
+    expect(readme).toContain(
+      "Nicht uebernommen (v1): Overlays des Schnittplans, Musik, Outro und die " +
+      "Fit-Schnitte der Sync-Logik.",
+    );
 
     expect(calls.filter((call) => call.bin === "ffmpeg")).toEqual([]);
     expect(warn.join(" ")).toContain("Wortzeiten");
@@ -474,6 +477,36 @@ describe("runHandoff", () => {
   it("weist unbekannte Schalter und ein leeres --out als Bedienfehler ab", async () => {
     expect(await runHandoff([".", "--schnell"])).toBe(2);
     expect(await runHandoff([".", "--out"])).toBe(2);
+  });
+
+  it("weist --out mit leerem Wert als Bedienfehler ab, statt aufs Arbeitsverzeichnis zu zielen", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "vw-handoff-"));
+
+    const code = await runHandoff([dir, "--out", ""]);
+
+    expect(code).toBe(2);
+    expect(text(err)).toContain("handoff <ordner> [--out <pfad>] [--force]");
+    expect(out).toEqual([]);
+  });
+
+  it("verweigert mit --force ein Ziel im Projekt oder darueber und laesst das Projekt unberuehrt", async () => {
+    const base = await mkdtemp(join(tmpdir(), "vw-handoff-"));
+    const dir = join(base, "projekt");
+    await saveProject(dir, project());
+    await mkdir(join(dir, "sources", "s01"), { recursive: true });
+    await writeFile(join(dir, "sources", "s01", "raw.mp4"), "film", "utf8");
+
+    const ziele = [dir, join(dir, "sources"), join(dir, "audio"), base];
+    for (const ziel of ziele) {
+      const code = await runHandoff([dir, "--out", ziel, "--force"], { run: fakeRun().run });
+
+      expect(code, ziel).toBe(1);
+      expect(text(err), ziel).toMatch(/Fehler/);
+      expect(err.at(-1), ziel).toContain(ziel);
+      expect(await readFile(join(dir, "sources", "s01", "raw.mp4"), "utf8"), ziel).toBe("film");
+      expect((await stat(join(dir, "project.json"))).isFile(), ziel).toBe(true);
+      await expect(stat(join(dir, "handoff")), ziel).rejects.toThrow();
+    }
   });
 
   it("meldet ein fehlendes Projekt mit Exit 1", async () => {

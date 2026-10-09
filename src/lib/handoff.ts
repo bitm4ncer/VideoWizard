@@ -208,13 +208,27 @@ function buildReadme(project: Project, target: string): string {
     "",
     `Oeffnen: \`diffusion open ${posixPath(target)}\` oder den Ordner in der App oeffnen.`,
     "",
-    "Nicht uebernommen (v1): Overlays des Schnittplans.",
+    "Nicht uebernommen (v1): Overlays des Schnittplans, Musik, Outro und die " +
+    "Fit-Schnitte der Sync-Logik.",
     "",
   ].join("\n");
 }
 
 function errorText(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+/**
+ * Ob ein Pfad im anderen liegt; Gleichheit zaehlt als "in". Windows
+ * vergleicht Pfade ohne Ruecksicht auf Gross- und Kleinschreibung.
+ */
+function isInside(path: string, parent: string): boolean {
+  const normalize = (value: string): string =>
+    process.platform === "win32" ? value.toLowerCase() : value;
+  const child = normalize(path);
+  const base = normalize(parent);
+  const prefix = base.endsWith(sep) ? base : base + sep;
+  return child === base || child.startsWith(prefix);
 }
 
 /** Der Zustand des Ziels: fehlt, leer oder belegt (auch als Datei). */
@@ -233,7 +247,8 @@ async function targetState(path: string): Promise<"missing" | "empty" | "full"> 
 /**
  * Baut den Diffusion-Studio-Ordner. Erst im Temp-Ordner daneben, dann als
  * Ganzes an seinen Platz: ein Fehler hinterlaesst keinen Mischzustand. Ein
- * belegter Zielordner wird verweigert, nur mit force ersetzt. Standbilder
+ * belegter Zielordner wird verweigert, nur mit force ersetzt. Ziele im
+ * Projekt selbst oder in seinen Medienquellen lehnt er immer ab. Standbilder
  * werden per ffmpeg extrahiert; Wortzeiten werden zu SRT-Dateien. Fehlen die
  * Wortzeiten, wird gewarnt und ohne Untertitel gebaut, kein Fehler.
  */
@@ -249,7 +264,8 @@ export async function renderHandoff(
   if (project.blocks.length === 0) {
     throw new Error("Hand-off nicht moeglich: das Projekt hat keine Bloecke.");
   }
-  const root = projectPaths(projectDir).dir;
+  const paths = projectPaths(projectDir);
+  const root = paths.dir;
   const sources = new Map(project.sources.map((source) => [source.id, source]));
   for (const block of project.blocks) {
     if (!sources.has(block.source_id)) {
@@ -258,6 +274,21 @@ export async function renderHandoff(
   }
 
   const target = resolve(out);
+  // Ein Ziel, das das Projekt umfasst, das Projekt selbst oder seine Medien
+  // ist, wuerde beim Ersetzen die einzigen Medienkopien loeschen; das ist ein
+  // Bedienfehler, kein force-Fall. Der Schutz greift vor jedem Loeschen.
+  if (target === root || isInside(root, target)) {
+    throw new Error(
+      `Ziel ist das Projekt selbst oder ein Ordner darueber: ${target}. ` +
+      "Bitte einen Zielordner ausserhalb waehlen.",
+    );
+  }
+  if (isInside(target, paths.sourcesDir) || isInside(target, join(root, "audio"))) {
+    throw new Error(
+      `Ziel liegt in den Projektmedien (sources oder audio): ${target}. ` +
+      "Bitte einen Zielordner ausserhalb waehlen.",
+    );
+  }
   const state = await targetState(target);
   if (state === "full" && deps.force !== true) {
     throw new Error(`Zielordner ist nicht leer: ${target}. Nur mit --force ersetzen.`);
