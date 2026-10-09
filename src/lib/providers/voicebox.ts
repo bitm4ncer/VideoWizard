@@ -20,6 +20,8 @@ export const POLL_MS = 2000;
 
 /** Grosse Laeufe brauchen Zeit, aber nicht ewig. */
 const GENERATE_TIMEOUT_MS = 20 * 60 * 1000;
+/** Hoechste Wartezeit eines Laufs auf die Fertigstellung, wenn nichts anderes gesetzt ist. */
+const DEFAULT_MAX_WAIT_MS = 20 * 60 * 1000;
 /** Kurzes Zeitlimit fuer /health, damit ein fehlender Dienst schnell auffaellt. */
 const HEALTH_TIMEOUT_MS = 3000;
 
@@ -179,6 +181,11 @@ interface GenerateState {
 
 const realSleep: SleepFn = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
+/** Millisekunden lesbar machen: unter einer Minute in ms, sonst gerundet in Minuten. */
+function durationText(ms: number): string {
+  return ms < 60_000 ? `${ms} ms` : `${Math.round(ms / 60_000)} min`;
+}
+
 /**
  * Der Voicebox-Anbieter hinter dem gemeinsamen Vertrag. `deps` ist einhakbar,
  * damit der Test ohne Server und ohne echtes Warten laeuft.
@@ -186,6 +193,8 @@ const realSleep: SleepFn = (ms) => new Promise((resolve) => setTimeout(resolve, 
 export function voiceboxProvider(cfg: VoiceboxOptions, deps: VoiceDeps = {}): VoiceProvider {
   const fetchFn = deps.fetch ?? fetch;
   const sleep = deps.sleep ?? realSleep;
+  const now = deps.now ?? Date.now;
+  const maxWaitMs = deps.maxWaitMs ?? DEFAULT_MAX_WAIT_MS;
   const base = baseOf(cfg);
 
   return {
@@ -218,6 +227,7 @@ export function voiceboxProvider(cfg: VoiceboxOptions, deps: VoiceDeps = {}): Vo
 
       let status = gen.status ?? "completed";
       let reason = gen.error ?? undefined;
+      const deadline = now() + maxWaitMs;
       while (status !== "completed" && status !== "failed") {
         await sleep(POLL_MS);
         const state = (await requestJson(
@@ -228,6 +238,12 @@ export function voiceboxProvider(cfg: VoiceboxOptions, deps: VoiceDeps = {}): Vo
         if (state) {
           status = state.status ?? status;
           reason = state.error ?? reason;
+        }
+        if (status !== "completed" && status !== "failed" && now() >= deadline) {
+          throw new Error(
+            `Voicebox auf ${base}: Die Frist von ${durationText(maxWaitMs)} fuer Generierung ${id} ` +
+            `ist abgelaufen (Status ${status}).`,
+          );
         }
       }
       if (status === "failed") {

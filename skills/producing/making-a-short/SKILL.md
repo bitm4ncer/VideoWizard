@@ -25,9 +25,10 @@ Werkzeugen: welcher Anbieter liefert, steht in `project.json` unter
 5. **Musik.** Die Faehigkeit `music` liefert den Klang; heute ist das
    `acestep`, Details in `tool-ace-step`.
 6. **Render.** `vz render <ordner>` schneidet, mischt und encodiert; die
-   Endmischung zielt auf -14 LUFS (Rezept: `ffmpeg-loudnorm`). Ueberlaenge
-   verweigert der Lauf ohne `--allow-overflow` und nennt die betroffenen
-   Bloecke; mit dem Schalter rendert er und warnt. Details in `tool-ffmpeg`.
+   Endmischung zielt auf -14 LUFS (Rezept: `ffmpeg-loudnorm`). Unfertige
+   Bloecke (Text oder Ton fehlt) und Ueberlaenge verweigert der Lauf und
+   nennt die betroffenen Bloecke; mit `--allow-incomplete` beziehungsweise
+   `--allow-overflow` rendert er und warnt. Details in `tool-ffmpeg`.
 
 `vz status <ordner>` zeigt jederzeit, welche Bloecke noch offen sind.
 

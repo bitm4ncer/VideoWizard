@@ -410,6 +410,40 @@ describe("runRender", () => {
     expect(text(warning)).toMatch(/Ueberlaenge/);
     expect(calls.length).toBeGreaterThan(0);
   });
+
+  it("verweigert unfertige Bloecke ohne --allow-incomplete und nennt die Bloecke", async () => {
+    const dir = await tempProject(beispiel([
+      block({ tts: { file: "audio/tts/b001.wav", duration: 8, hash: "h", generated_at: "x" } }),
+      block({ id: "b002", text: undefined, tts: undefined }),
+    ]));
+    const { calls, run } = recordingRun();
+
+    const code = await runRender([dir], { run });
+
+    expect(code).toBe(1);
+    expect(text(err)).toMatch(/b002/);
+    expect(out).toEqual([]);
+    // Der Plan bricht ab, bevor ein Prozess laeuft.
+    expect(calls).toEqual([]);
+  });
+
+  it("rendert unfertige Bloecke mit --allow-incomplete und warnt", async () => {
+    const dir = await tempProject(beispiel([
+      block({ tts: { file: "audio/tts/b001.wav", duration: 8, hash: "h", generated_at: "x" } }),
+      block({ id: "b002", text: undefined, tts: undefined }),
+    ]));
+    const { calls, run } = recordingRun();
+
+    const code = await runRender([dir, "--allow-incomplete"], { run });
+
+    // Der eingehakte Prozess scheitert; wichtig ist, dass der Lauf nicht schon
+    // am Plan abbricht und der Schalter ankommt.
+    expect(code).toBe(1);
+    expect(text(err)).toContain("ffmpeg scheiterte");
+    expect(text(err)).not.toMatch(/Unfertige Bloecke/);
+    expect(text(warning)).toMatch(/b002/);
+    expect(calls.length).toBeGreaterThan(0);
+  });
 });
 
 describe("runIngest", () => {

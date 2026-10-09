@@ -176,6 +176,33 @@ describe("voiceboxProvider: einen Take erzeugen", () => {
     expect(waits).toEqual([POLL_MS, POLL_MS]);
   });
 
+  it("bricht ab, wenn die Frist ohne Fertigstellung verstreicht", async () => {
+    const { fetch, calls } = stubFetch([
+      () => profiles("p1"),
+      () => json({ id: "g1", status: "running" }),
+      ...Array.from({ length: 4 }, () => () => json({ id: "g1", status: "running" })),
+    ]);
+    // Der echte Timer wird nie benutzt: der Schlaf schiebt nur die Uhr vor.
+    let clock = 0;
+    const waits: number[] = [];
+    const sleep: SleepFn = async (ms) => {
+      waits.push(ms);
+      clock += ms;
+    };
+
+    const provider = voiceboxProvider(options, {
+      fetch, sleep, now: () => clock, maxWaitMs: 3 * POLL_MS,
+    });
+
+    const error = await errorOf(provider.speak("Hallo", {}));
+
+    expect(error.message).toMatch(/g1/);
+    expect(error.message).toMatch(/Frist/);
+    expect(error.message).toContain(`${3 * POLL_MS} ms`);
+    expect(waits).toEqual([POLL_MS, POLL_MS, POLL_MS]);
+    expect(calls.filter((call) => call.url.endsWith("/status"))).toHaveLength(3);
+  });
+
   it("fragt nicht, wenn der Lauf schon fertig gemeldet ist", async () => {
     const { fetch, calls } = stubFetch([
       () => profiles("p2"),

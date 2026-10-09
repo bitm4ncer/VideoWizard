@@ -52,23 +52,27 @@ function remainingRanges(
 
 /**
  * Uebersetzt die Projektdatei in einen ausfuehrbaren Render-Plan.
- * Bloecke ohne Text oder Ton fallen mit einer Warnung heraus, Ueberlaenge
- * bricht ab, ausser sie wird ausdruecklich erlaubt. Reine Funktion ohne
- * Dateizugriff: die Existenz von Musik und Outro prueft erst der Render.
+ * Bloecke ohne Text oder Ton lassen den Lauf abbrechen, ausser sie werden
+ * ausdruecklich erlaubt; dann fallen sie mit einer Warnung heraus. Ueberlaenge
+ * bricht ebenso ab, ausser sie wird ausdruecklich erlaubt. Reine Funktion
+ * ohne Dateizugriff: die Existenz von Musik und Outro prueft erst der Render.
  */
 export function buildRenderPlan(
   project: Project,
-  opts: { allowOverflow?: boolean } = {},
+  opts: { allowOverflow?: boolean; allowIncomplete?: boolean } = {},
 ): RenderPlan {
   const warnings: string[] = [];
   const video: VideoSegment[] = [];
   const audio: AudioSegment[] = [];
   const overflowing: string[] = [];
+  const incomplete: string[] = [];
   const sourceById = new Map(project.sources.map((source) => [source.id, source]));
 
   for (const block of project.blocks) {
     const tts = block.tts;
     if (blockStatus(block) !== "ok" || tts === undefined) {
+      incomplete.push(block.id);
+      if (opts.allowIncomplete !== true) continue;
       warnings.push(
         `Block ${block.id} ist noch nicht fertig (Text oder Ton fehlt) und wird ausgelassen.`,
       );
@@ -106,6 +110,14 @@ export function buildRenderPlan(
       duration: tts.duration,
       pauseAfter: block.pause_after,
     });
+  }
+
+  if (incomplete.length > 0 && opts.allowIncomplete !== true) {
+    throw new Error(
+      `Unfertige Bloecke: ${incomplete.join(", ")}. ` +
+      "Vertone die Bloecke zuerst oder rendere bewusst ohne sie. " +
+      "Zum bewussten Ignorieren allowIncomplete setzen.",
+    );
   }
 
   if (overflowing.length > 0 && opts.allowOverflow !== true) {

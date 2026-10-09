@@ -136,6 +136,8 @@ async function normalisedOutro(
 export interface RenderOptions {
   /** Ueberlaenge bewusst rendern statt abzubrechen. */
   allowOverflow?: boolean;
+  /** Unfertige Bloecke (Text oder Ton fehlt) bewusst auslassen statt abzubrechen. */
+  allowIncomplete?: boolean;
 }
 
 /**

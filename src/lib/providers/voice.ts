@@ -24,6 +24,10 @@ export interface VoiceDeps {
   fetch?: FetchLike;
   /** Vorgabe: ein echter Timer. */
   sleep?: SleepFn;
+  /** Wie die Uhr gelesen wird; Vorgabe: Date.now. Einhakbar fuer Fristen im Test. */
+  now?: () => number;
+  /** Hoechste Wartezeit eines Laufs in Millisekunden; die Vorgabe setzt der Anbieter. */
+  maxWaitMs?: number;
 }
 
 /** Echte Zeichenzeiten einer Stimme; je Zeichen Start und Ende in Sekunden. */

@@ -30,9 +30,10 @@ Kein Schluessel, keine Konfigurationsdatei. Wichtig ist, dass derselbe
 `vz render <ordner>` faehrt die ganze Kette: Bloecke schneiden, per
 concat-Liste zusammenfuegen, Sprachspur und Musik mit Ducking mischen, final
 mit NVENC encodieren; scheitert das, weicht der Lauf auf libx264 aus.
-Ueberlaenge verweigert der Lauf ohne `--allow-overflow`; der Schalter rendert
-und warnt. Die Pegel kommen aus `project.audio`; ohne Angabe gilt das Rezept
-aus dem Baustein `ffmpeg-loudnorm`:
+Ueberlaenge verweigert der Lauf ohne `--allow-overflow`, unfertige Bloecke
+(Text oder Ton fehlt) ohne `--allow-incomplete`; der jeweilige Schalter
+rendert und warnt. Die Pegel kommen aus `project.audio`; ohne Angabe gilt
+das Rezept aus dem Baustein `ffmpeg-loudnorm`:
 
 1. Stimme allein: `loudnorm=I=-16:TP=-1.5:LRA=11`.
 2. Endmischung: `loudnorm=I=-14:TP=-1.5:LRA=11`.

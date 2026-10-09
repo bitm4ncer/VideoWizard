@@ -64,8 +64,9 @@ dem Provider-Vertrag, nichts geraten):
 - Ein Status `failed` wirft mit Kennung und Grund; eine Antwort ohne
   Generierungs-Kennung ebenfalls.
 - Lokal, ohne Schluessel und ohne Kosten; dafuer braucht der Lauf den
-  laufenden Dienst (Zeitlimit je Anfrage 20 Minuten, `/health` bricht
-  nach 3 Sekunden ab).
+  laufenden Dienst. Eine Generierung hat eine Frist von 20 Minuten; laeuft
+  sie dann noch, wirft der Lauf mit Kennung und Status. `/health` bricht
+  nach 3 Sekunden ab.
 - Keine Annahmen ueber andere Endpunkte oder Felder; der Massstab ist der
   Provider-Vertrag in `src/lib/providers/voicebox.ts`.
 

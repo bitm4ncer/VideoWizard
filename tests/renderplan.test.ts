@@ -123,10 +123,17 @@ describe("buildRenderPlan", () => {
     expect(plan.warnings.join(" ")).toMatch(/Ueberlaenge/);
   });
 
-  it("laesst Bloecke ohne Ton aus und warnt", () => {
+  it("verweigert unfertige Bloecke und nennt sie", () => {
     const fertig = block();
     const offen = block({ id: "b002", text: undefined, tts: undefined });
-    const plan = buildRenderPlan(project([fertig, offen]));
+
+    expect(() => buildRenderPlan(project([fertig, offen]))).toThrow(/b002/);
+  });
+
+  it("laesst unfertige Bloecke mit allowIncomplete aus und warnt", () => {
+    const fertig = block();
+    const offen = block({ id: "b002", text: undefined, tts: undefined });
+    const plan = buildRenderPlan(project([fertig, offen]), { allowIncomplete: true });
 
     expect(plan.video.map((segment) => segment.blockId)).toEqual(["b001"]);
     expect(plan.warnings.join(" ")).toMatch(/b002/);
