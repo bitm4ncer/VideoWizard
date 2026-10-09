@@ -11,15 +11,31 @@ import { execFile } from "node:child_process";
 /** Wie ein fehlender Anbieter beschafft wird. `key` braucht einen Schluessel. */
 export type InstallKind = "auto" | "manual" | "key";
 
-/** Ein Anbieter in der Registry: nur Metadaten, kein Verhalten. */
-export interface ProviderInfo {
+/** Wie ein Anbieter erkannt wird: als Programm ueber einen Prozess, als Dienst im Netz. */
+export type ProviderKind = "program" | "service";
+
+/** Gemeinsame Metadaten eines Registry-Anbieters. */
+interface ProviderBase {
   /** Kennung, etwa "ffmpeg" oder "acestep". */
   id: string;
-  /** Befehl plus Argumente, dessen Antwort die Anwesenheit beweist. */
-  detect: string[];
   /** Wie der Anbieter beschafft wird, wenn er fehlt. */
   install: InstallKind;
 }
+
+/** Ein Programm-Anbieter: erkannt ueber einen Prozessbefehl. */
+export interface ProgramProvider extends ProviderBase {
+  kind: "program";
+  /** Befehl plus Argumente, dessen Antwort die Anwesenheit beweist. */
+  detect: string[];
+}
+
+/** Ein Dienst-Anbieter: erkannt ueber die echte `detect()` seines Providers. */
+export interface ServiceProvider extends ProviderBase {
+  kind: "service";
+}
+
+/** Ein Anbieter in der Registry: Metadaten plus die Art der Erkennung. */
+export type ProviderInfo = ProgramProvider | ServiceProvider;
 
 /** Eine Faehigkeit mit den Anbietern, die sie abdecken koennen. */
 export interface Capability {
@@ -48,9 +64,21 @@ export type Report = CapabilityReport[];
 /** Fuehrt einen Erkennungsbefehl aus und liefert dessen Ausgabe. */
 export type Run = (args: string[]) => Promise<string>;
 
+/** Was ein Dienst zum Pruefen koennen muss: seine echte `detect()`. */
+export interface DetectableService {
+  detect(): Promise<boolean>;
+}
+
+/** Baut den Dienst zum Pruefen; eingehakt, damit der Test ohne Dienst laeuft. */
+export type ServiceFactory = () => DetectableService;
+
+/** Die Dienst-Fabriken je Kennung. Fehlt eine, gilt der Dienst als fern. */
+export type ServiceFactories = Record<string, ServiceFactory>;
+
 /**
- * Die Registry, Stand Etappe 1: `render` mit ffmpeg und `music` mit acestep.
- * Weitere Faehigkeiten und Anbieter folgen mit ihren Etappen.
+ * Die Registry, Stand Etappe 2a: `render` mit ffmpeg, `music` mit acestep und
+ * `voice` mit voicebox. Weitere Faehigkeiten und Anbieter folgen mit ihren
+ * Etappen.
  */
 const registry: Capability[] = [
   {
@@ -59,6 +87,7 @@ const registry: Capability[] = [
     providers: [
       {
         id: "ffmpeg",
+        kind: "program",
         detect: ["ffmpeg", "-version"],
         install: "auto",
       },
@@ -70,7 +99,18 @@ const registry: Capability[] = [
     providers: [
       {
         id: "acestep",
-        detect: ["acestep-api", "--help"],
+        kind: "service",
+        install: "manual",
+      },
+    ],
+  },
+  {
+    id: "voice",
+    label: "Stimme",
+    providers: [
+      {
+        id: "voicebox",
+        kind: "service",
         install: "manual",
       },
     ],
@@ -112,6 +152,28 @@ async function answers(command: string[], run: Run): Promise<boolean> {
   }
 }
 
+/**
+ * Ist der Anbieter da? Ein Programm antwortet auf seinen Prozessbefehl, ein
+ * Dienst ueber die eingehakte echte `detect()`. Wirft nie: was nicht
+ * antwortet, und was beim Fragen scheitert, gilt als fern.
+ */
+async function found(
+  provider: ProviderInfo,
+  run: Run,
+  services: ServiceFactories,
+): Promise<boolean> {
+  if (provider.kind === "program") {
+    return answers(provider.detect, run);
+  }
+  const build = services[provider.id];
+  if (build === undefined) return false;
+  try {
+    return await build().detect();
+  } catch {
+    return false;
+  }
+}
+
 /** Der Zustand, wenn kein Anbieter gefunden wurde. */
 function missingState(providers: readonly ProviderInfo[]): CapabilityState {
   if (providers.some((provider) => provider.install === "auto")) {
@@ -127,9 +189,13 @@ function missingState(providers: readonly ProviderInfo[]): CapabilityState {
   return "manual";
 }
 
-async function stateFor(capability: Capability, run: Run): Promise<CapabilityReport> {
+async function stateFor(
+  capability: Capability,
+  run: Run,
+  services: ServiceFactories,
+): Promise<CapabilityReport> {
   for (const provider of capability.providers) {
-    if (await answers(provider.detect, run)) {
+    if (await found(provider, run, services)) {
       return { capability, state: "present", provider: provider.id };
     }
   }
@@ -139,16 +205,17 @@ async function stateFor(capability: Capability, run: Run): Promise<CapabilityRep
 /**
  * Stellt den Zustand jeder Faehigkeit fest. Wirft nie: ein fehlendes Werkzeug
  * ist ein Zustand, kein Fehler. `run` ist einhakbar, damit der Test ohne
- * Werkzeug laeuft; `list` ebenso, damit der Test eine Faehigkeit ohne Anbieter
- * stellen kann.
+ * Werkzeug laeuft; `services` ebenso mit einer Fabrik je Dienst, damit der
+ * Test ohne echten Dienst laeuft. Ohne Fabrik gilt ein Dienst als fern.
  */
 export async function detect(
   run: Run = runProcess,
   list: readonly Capability[] = capabilities(),
+  services: ServiceFactories = {},
 ): Promise<Report> {
   const report: Report = [];
   for (const capability of list) {
-    report.push(await stateFor(capability, run));
+    report.push(await stateFor(capability, run, services));
   }
   return report;
 }
@@ -161,10 +228,21 @@ const STATE_TEXT: Record<CapabilityState, string> = {
   "key-required": "Schluessel noetig",
 };
 
-/** Die Anbieter in Klammern, damit klar ist, worum es geht. */
+/** Das Wort vor der Kennung des gefundenen Anbieters: Programm oder Dienst. */
+function providerKindText(row: CapabilityReport): string {
+  const foundProvider = row.capability.providers.find(
+    (provider) => provider.id === row.provider,
+  );
+  return foundProvider?.kind === "service" ? "Dienst" : "Programm";
+}
+
+/**
+ * Die Anbieter in Klammern, damit klar ist, worum es geht: beim gefundenen
+ * Anbieter mit seiner Art, sonst alle Kennungen der Faehigkeit.
+ */
 function providerNote(row: CapabilityReport): string {
   if (row.provider !== undefined) {
-    return ` (${row.provider})`;
+    return ` (${providerKindText(row)}: ${row.provider})`;
   }
   const ids = row.capability.providers.map((provider) => provider.id);
   return ids.length > 0 ? ` (${ids.join(", ")})` : "";

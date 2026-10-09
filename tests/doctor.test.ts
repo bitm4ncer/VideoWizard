@@ -1,7 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { runCli } from "../src/cli.js";
 import { capabilities, detect, renderReport } from "../src/lib/capabilities.js";
-import type { Capability, CapabilityState, Run } from "../src/lib/capabilities.js";
+import { acestepProvider } from "../src/lib/providers/acestep.js";
+import type {
+  Capability,
+  CapabilityState,
+  Run,
+  ServiceFactories,
+} from "../src/lib/capabilities.js";
+import type { FetchLike } from "../src/lib/providers/music.js";
 
 /** Ein run, der jeden Erkennungsbefehl verneint. */
 const failing: Run = async () => {
@@ -9,14 +16,32 @@ const failing: Run = async () => {
 };
 
 describe("capabilities: die Registry", () => {
-  it("beginnt mit render (ffmpeg) und music (acestep)", () => {
+  it("fuehrt render (ffmpeg), music (acestep) und voice (voicebox)", () => {
     const list = capabilities();
     const render = list.find((capability) => capability.id === "render");
     const music = list.find((capability) => capability.id === "music");
+    const voice = list.find((capability) => capability.id === "voice");
     expect(render?.providers.map((provider) => provider.id)).toEqual(["ffmpeg"]);
     expect(music?.providers.map((provider) => provider.id)).toEqual(["acestep"]);
+    expect(voice?.providers.map((provider) => provider.id)).toEqual(["voicebox"]);
     expect(render?.label).toBeTruthy();
     expect(music?.label).toBeTruthy();
+    expect(voice?.label).toBeTruthy();
+  });
+
+  it("traegt je Anbieter die Art Programm oder Dienst", () => {
+    const providers = capabilities().flatMap((capability) => capability.providers);
+    const kinds = Object.fromEntries(providers.map((provider) => [provider.id, provider.kind]));
+    expect(kinds).toEqual({
+      ffmpeg: "program",
+      acestep: "service",
+      voicebox: "service",
+    });
+  });
+
+  it("hat fuer acestep keinen Prozess-Proxy mehr", () => {
+    const music = capabilities().find((capability) => capability.id === "music");
+    expect(music?.providers[0]).not.toHaveProperty("detect");
   });
 });
 
@@ -32,12 +57,66 @@ describe("detect: die Zustaende", () => {
     expect(render?.state).toBe("present");
     expect(render?.provider).toBe("ffmpeg");
     expect(calls).toContainEqual(["ffmpeg", "-version"]);
+    expect(renderReport(report)).toContain("Schnitt/Mix/Render: vorhanden (Programm: ffmpeg)");
   });
 
   it("meldet ffmpeg als automatisch installierbar, wenn der Befehl fehlt", async () => {
     const report = await detect(failing);
     const render = report.find((entry) => entry.capability.id === "render");
     expect(render?.state).toBe("auto-installable");
+    expect(renderReport(report)).toContain("Schnitt/Mix/Render: automatisch installierbar (ffmpeg)");
+  });
+
+  it("meldet einen Dienst mit erreichbarem /health als vorhanden (Dienst: acestep)", async () => {
+    const calls: string[] = [];
+    const fetch: FetchLike = async (url) => {
+      calls.push(url);
+      return new Response("ok", { status: 200 });
+    };
+    const services: ServiceFactories = { acestep: () => acestepProvider({}, { fetch }) };
+
+    const report = await detect(failing, capabilities(), services);
+    const music = report.find((entry) => entry.capability.id === "music");
+
+    expect(music?.state).toBe("present");
+    expect(music?.provider).toBe("acestep");
+    expect(renderReport(report)).toContain("Musik: vorhanden (Dienst: acestep)");
+    expect(calls).toContain("http://127.0.0.1:8001/health");
+  });
+
+  it("meldet einen toten Dienst als nur von Hand und wirft nie", async () => {
+    const fetch: FetchLike = async () => {
+      throw new Error("kein Dienst");
+    };
+    const services: ServiceFactories = { acestep: () => acestepProvider({}, { fetch }) };
+
+    const report = await detect(failing, capabilities(), services);
+    const music = report.find((entry) => entry.capability.id === "music");
+
+    expect(music?.state).toBe("manual");
+    expect(music?.provider).toBeUndefined();
+    expect(renderReport(report)).toContain("Musik: nur von Hand (acestep)");
+  });
+
+  it("meldet einen Dienst ohne Fabrik als nur von Hand, ohne einen Dienst zu fragen", async () => {
+    const report = await detect(failing);
+    const music = report.find((entry) => entry.capability.id === "music");
+    const voice = report.find((entry) => entry.capability.id === "voice");
+    expect(music?.state).toBe("manual");
+    expect(voice?.state).toBe("manual");
+  });
+
+  it("wirft nicht, wenn die Dienst-Erkennung selbst scheitert", async () => {
+    const services: ServiceFactories = {
+      acestep: () => ({
+        detect: async () => {
+          throw new Error("kaputt");
+        },
+      }),
+    };
+    const report = await detect(failing, capabilities(), services);
+    const music = report.find((entry) => entry.capability.id === "music");
+    expect(music?.state).toBe("manual");
   });
 
   it("meldet eine Faehigkeit ohne Anbieter als nur von Hand", async () => {
@@ -51,10 +130,13 @@ describe("detect: die Zustaende", () => {
     const mitSchluessel: Capability = {
       id: "voice",
       label: "Stimme",
-      providers: [{ id: "elevenlabs", detect: ["elevenlabs", "ping"], install: "key" }],
+      providers: [
+        { id: "elevenlabs", kind: "program", detect: ["elevenlabs", "ping"], install: "key" },
+      ],
     };
     const report = await detect(failing, [mitSchluessel]);
     expect(report[0]?.state).toBe("key-required");
+    expect(renderReport(report)).toBe("Stimme: Schluessel noetig (elevenlabs)");
   });
 
   it("wirft nicht, wenn der Erkennungsbefehl sofort scheitert", async () => {
@@ -108,15 +190,30 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
 });
 
 describe("runCli: doctor", () => {
   it("meldet jede Faehigkeit mit einem Zustand und endet mit 0", async () => {
+    vi.stubGlobal("fetch", async () => new Response("", { status: 200 }));
     const code = await runCli(["doctor"]);
     expect(code).toBe(0);
     expect(out.join("\n")).toContain("Schnitt/Mix/Render");
-    expect(out.join("\n")).toContain("Musik");
+    expect(out.join("\n")).toContain("Musik: vorhanden (Dienst: acestep)");
+    expect(out.join("\n")).toContain("Stimme: vorhanden (Dienst: voicebox)");
     expect(err).toEqual([]);
+  });
+
+  it("fragt die Dienste ohne Projekt an ihren Vorgabeadressen", async () => {
+    const urls: string[] = [];
+    vi.stubGlobal("fetch", async (input: string | URL) => {
+      urls.push(String(input));
+      return new Response("", { status: 200 });
+    });
+    const code = await runCli(["doctor"]);
+    expect(code).toBe(0);
+    expect(urls).toContain("http://127.0.0.1:8001/health");
+    expect(urls).toContain("http://127.0.0.1:17493/health");
   });
 
   it("endet bei zu vielen Argumenten mit 2 und einer Aufrufzeile", async () => {

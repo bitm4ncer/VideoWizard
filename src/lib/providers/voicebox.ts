@@ -27,8 +27,8 @@ const HEALTH_TIMEOUT_MS = 3000;
 export interface VoiceboxOptions {
   /** Adresse des lokalen Servers, etwa http://127.0.0.1:17493 */
   base_url: string;
-  /** Name des geklonten Profils; wird in eine Kennung aufgeloest. */
-  profile_name: string;
+  /** Name des geklonten Profils; wird in eine Kennung aufgeloest. Fehlt er, wirft `speak`. */
+  profile_name?: string;
   /** TTS-Engine, etwa "qwen". Fehlt sie, entscheidet der Server. */
   engine?: string;
   /** Groesse des Modells, etwa "1.7B". Fehlt sie, entscheidet der Server. */
@@ -39,8 +39,9 @@ export interface VoiceboxOptions {
 
 /**
  * Liest die bekannten Optionen; ein falscher Typ zaehlt als nicht gesetzt.
- * base_url und profile_name sind Pflicht: ohne sie gibt es eine klare Meldung
- * statt einer Anfrage ins Leere.
+ * base_url ist Pflicht: ohne sie gibt es eine klare Meldung statt einer
+ * Anfrage ins Leere. profile_name ist optional, weil `detect()` nur die
+ * Adresse braucht; `speak` verlangt den Namen beim Aufruf.
  */
 export function toVoiceboxOptions(options: Record<string, unknown> = {}): VoiceboxOptions {
   const readString = (key: string): string | undefined => {
@@ -52,10 +53,8 @@ export function toVoiceboxOptions(options: Record<string, unknown> = {}): Voiceb
   if (base_url === undefined) {
     throw new Error('Voicebox: "base_url" fehlt in capabilities.voice.options.');
   }
-  if (profile_name === undefined) {
-    throw new Error('Voicebox: "profile_name" fehlt in capabilities.voice.options.');
-  }
-  const cfg: VoiceboxOptions = { base_url, profile_name };
+  const cfg: VoiceboxOptions = { base_url };
+  if (profile_name !== undefined) cfg.profile_name = profile_name;
   const engine = readString("engine");
   const model_size = readString("model_size");
   const language = readString("language");
@@ -134,11 +133,11 @@ export function resetVoiceboxProfileCache(): void {
  * Meldung Name und Adresse.
  */
 async function resolveProfile(
-  cfg: VoiceboxOptions,
+  profileName: string,
   base: string,
   fetchFn: FetchLike,
 ): Promise<string> {
-  const key = `${base}\u0000${cfg.profile_name}`;
+  const key = `${base}\u0000${profileName}`;
   const cached = profileIds.get(key);
   if (cached !== undefined) return cached;
 
@@ -147,10 +146,10 @@ async function resolveProfile(
     | Array<{ id?: string; name?: string }>
     | null;
   const list = Array.isArray(data) ? data : (data?.value ?? []);
-  const hit = list.find((profile) => profile.name === cfg.profile_name);
+  const hit = list.find((profile) => profile.name === profileName);
   if (!hit?.id) {
     throw new Error(
-      `Voicebox-Profil "${cfg.profile_name}" fehlt auf ${base}. ` +
+      `Voicebox-Profil "${profileName}" fehlt auf ${base}. ` +
       `Anlegen in der Voicebox-Oberflaeche.`,
     );
   }
@@ -193,7 +192,11 @@ export function voiceboxProvider(cfg: VoiceboxOptions, deps: VoiceDeps = {}): Vo
     id: "voicebox",
     detect: () => healthy(base, fetchFn),
     speak: async (text, opts): Promise<VoiceTake> => {
-      const profileId = await resolveProfile(cfg, base, fetchFn);
+      const profileName = cfg.profile_name;
+      if (profileName === undefined) {
+        throw new Error('Voicebox: "profile_name" fehlt in capabilities.voice.options.');
+      }
+      const profileId = await resolveProfile(profileName, base, fetchFn);
 
       const gen = (await requestJson(
         `${base}/generate`,

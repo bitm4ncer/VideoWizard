@@ -136,6 +136,12 @@ describe("voiceboxProvider: erkennen", () => {
     await voiceboxProvider(cfg, { fetch }).detect();
     expect(calls).toEqual([{ method: "GET", url: `${BASE}/health` }]);
   });
+
+  it("erkennt ohne profile_name, weil detect() nur base_url braucht", async () => {
+    const { fetch, calls } = stubFetch([() => new Response("ok", { status: 200 })]);
+    expect(await voiceboxProvider({ base_url: BASE }, { fetch }).detect()).toBe(true);
+    expect(calls).toEqual([{ method: "GET", url: `${BASE}/health` }]);
+  });
 });
 
 describe("voiceboxProvider: einen Take erzeugen", () => {
@@ -298,6 +304,16 @@ describe("voiceboxProvider: Fehler", () => {
     expect(error.message).toMatch(/HTTP 500/);
   });
 
+  it("wirft mit klarer Meldung, wenn der Profilname fehlt, und fragt den Dienst nicht", async () => {
+    const { fetch, calls } = stubFetch([]);
+
+    const error = await errorOf(voiceboxProvider({ base_url: BASE }, { fetch }).speak("Hallo", {}));
+
+    expect(error.message).toMatch(/Voicebox/);
+    expect(error.message).toMatch(/profile_name/);
+    expect(calls).toEqual([]);
+  });
+
   it("wirft, wenn keine Generierungs-Kennung kommt", async () => {
     const { fetch } = stubFetch([
       () => profiles("p1"),
@@ -332,8 +348,8 @@ describe("toVoiceboxOptions", () => {
     expect(() => toVoiceboxOptions({ profile_name: PROFILE })).toThrow(/base_url/);
   });
 
-  it("wirft ohne profile_name", () => {
-    expect(() => toVoiceboxOptions({ base_url: BASE })).toThrow(/profile_name/);
+  it("laesst profile_name weg, damit detect() ohne Projekt laeuft", () => {
+    expect(toVoiceboxOptions({ base_url: BASE })).toEqual({ base_url: BASE });
   });
 
   it("laesst falsche Typen als nicht gesetzt gelten", () => {
