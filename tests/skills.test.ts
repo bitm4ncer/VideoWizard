@@ -7,13 +7,14 @@ import { describe, expect, it } from "vitest";
 /** Die Repo-Wurzel, in der die echten Skills liegen. */
 const repoRoot = fileURLToPath(new URL("..", import.meta.url));
 
-/** Die Skills, die Etappe 1 verlangt. Geprueft wird der echte Repo-Bestand. */
-const skillsAusEtappeEins = [
+/** Die Skills, die die Etappen verlangen. Geprueft wird der echte Repo-Bestand. */
+const verlangteSkills = [
   "skills/meta/using-videowizard/SKILL.md",
   "skills/planning/planning-short/SKILL.md",
   "skills/producing/making-a-short/SKILL.md",
   "skills/tools/tool-ffmpeg/SKILL.md",
   "skills/tools/tool-ace-step/SKILL.md",
+  "skills/tools/tool-voicebox/SKILL.md",
   "skills/reference/blocks/SKILL.md",
   "skills/reference/video-anatomy/SKILL.md",
 ];
@@ -93,10 +94,10 @@ function wordCount(text: string): number {
   return text.split(/\s+/).filter((wort) => wort !== "").length;
 }
 
-describe("die Skills aus Etappe 1", () => {
+describe("die verlangten Skills", () => {
   it("sind alle im Repo vorhanden", async () => {
     const fehlend: string[] = [];
-    for (const skill of skillsAusEtappeEins) {
+    for (const skill of verlangteSkills) {
       if (!(await isFile(repoFile(skill)))) {
         fehlend.push(skill);
       }

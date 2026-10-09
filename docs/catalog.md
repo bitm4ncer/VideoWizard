@@ -21,6 +21,7 @@ Bausteinen in `blocks/index.json`. Diese Datei wird nicht von Hand gepflegt.
 
 - **tool-ace-step**: Use when local music generation is needed, when ACE-Step does not respond, or when its setup, API or limits are unclear.
 - **tool-ffmpeg**: Use when ffmpeg must be checked, installed or used for a VideoWizard job, or when a loudness value needs its source.
+- **tool-voicebox**: Use when local speech from a cloned voice is needed, when Voicebox does not respond, or when its setup, API or limits are unclear.
 
 ### reference
 

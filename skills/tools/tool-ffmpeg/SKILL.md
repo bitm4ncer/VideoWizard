@@ -10,8 +10,8 @@ ffmpeg ist der Kern fuer Schnitt, Mix und Render (Spezifikation Abschnitt 4).
 ## Erkennen
 
 `vz doctor` prueft die Faehigkeit `render` mit dem Befehl `ffmpeg -version`.
-Antwortet er, meldet der Doctor "vorhanden (ffmpeg)"; sonst "automatisch
-installierbar (ffmpeg)".
+Antwortet er, meldet der Doctor "vorhanden (Programm: ffmpeg)"; sonst
+"automatisch installierbar (ffmpeg)".
 
 ## Installieren
 
@@ -23,12 +23,16 @@ laufen lassen.
 ## Einrichten
 
 Kein Schluessel, keine Konfigurationsdatei. Wichtig ist, dass derselbe
-`ffmpeg`-Befehl im `PATH` liegt, den der Doctor und spaeter der Kern aufrufen.
+`ffmpeg`-Befehl im `PATH` liegt, den Doctor und Render aufrufen.
 
 ## Benutzen
 
-Einen `vz render`-Befehl gibt es noch nicht; er kommt mit dem ffmpeg-Kern in
-Etappe 2. Nutzbar ist heute das Rezept aus dem Baustein `ffmpeg-loudnorm`:
+`vz render <ordner>` faehrt die ganze Kette: Bloecke schneiden, per
+concat-Liste zusammenfuegen, Sprachspur und Musik mit Ducking mischen, final
+mit NVENC encodieren; scheitert das, weicht der Lauf auf libx264 aus.
+Ueberlaenge verweigert der Lauf ohne `--allow-overflow`; der Schalter rendert
+und warnt. Die Pegel kommen aus `project.audio`; ohne Angabe gilt das Rezept
+aus dem Baustein `ffmpeg-loudnorm`:
 
 1. Stimme allein: `loudnorm=I=-16:TP=-1.5:LRA=11`.
 2. Endmischung: `loudnorm=I=-14:TP=-1.5:LRA=11`.

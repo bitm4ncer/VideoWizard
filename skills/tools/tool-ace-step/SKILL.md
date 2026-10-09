@@ -10,8 +10,10 @@ lokale Server wird per HTTP auf Port 8001 angesprochen.
 
 ## Erkennen
 
-- Der Doctor fuehrt die Faehigkeit `music` und prueft `acestep-api --help`;
-  ACE-Step gilt dort als "nur von Hand".
+- Der Doctor fuehrt die Faehigkeit `music`: Er meldet "vorhanden (Dienst:
+  acestep)", wenn die echte Dienst-Erkennung des Anbieters anschlaegt, sonst
+  "nur von Hand (acestep)". Den frueher benutzten `acestep-api --help`-Proxy
+  gibt es nicht mehr.
 - Der Anbieter selbst prueft den Server mit `GET /health`. Antwortet er nicht
   oder nicht mit HTTP 200, ist der Dienst nicht bereit; ein fehlender Dienst
   wirft nicht.
