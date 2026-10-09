@@ -280,3 +280,5 @@ verwildern.
 | **3** | Weitere Provider: Voicebox, Chatterbox, Cavalry/AE/Remotion-Bausteine | Werkzeugwechsel ohne Workflow-Aenderung |
 | **4** | MCP-Server und Hüllen fuer Claude, Codex, OpenCode | installierbar und auffindbar |
 | **5** | Improvement Loop und Migrationskarte aus der VideoPipeline | Learnings wandern nachweisbar in Skills und Bausteine |
+| **6** | Kreativschicht fuer Kundenarbeit: Storyboarding mit Gates, Referenz-Analyse, Treatment-Vorlage, Style-Karten, `vz review` | ohne Schemaaenderung; eigene Spec `docs/superpowers/specs/2026-10-09-kreativschicht-design.md`; Shots pruefbar, Nachschau messbar |
+| **7** | Finish fuer Menschen: `vz handoff` nach Diffusion Studio (Einweg; Spike am 09.10.2026 gruen) | generiertes Projekt oeffnet, prueft und rendert in DS; Restpunkte Audio, Captions, Bibliothek |
