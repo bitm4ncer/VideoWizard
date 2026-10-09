@@ -17,23 +17,26 @@ Werkzeugen: welcher Anbieter liefert, steht in `project.json` unter
    Aufnahme ein und legt sie als Quelle ab. Die erste Quelle setzt das
    Projektformat; die Hauptaufnahme gehoert zuerst eingelesen und im
    Zielformat (9:16, 1080x1920) gedreht.
-3. **Bloecke schreiben.** Bloecke und ihr Text stehen in `project.json`. Ein
-   Transkript gibt es noch nicht; bis Etappe 2b schreibt der Agent die
-   Bloecke von Hand, ein Kapitel je Schnitt.
+3. **Transkript und Segmentierung.** `vz transcribe <ordner> <quelle>`
+   transkribiert die Tonspur der Quelle und erkennt ihre Pausen;
+   `vz segment <ordner> <quelle>` teilt das Transkript an den Pausen in
+   Bloecke und haengt sie hinten an `project.json` an. Bloecke koennen
+   weiterhin von Hand geschrieben oder bearbeitet werden, jetzt aber auch
+   aus der Aufnahme entstehen; Details in `tool-whisper`.
 4. **Stimme.** `vz voice <ordner>` vertont jeden Block, dessen Text da ist
    und dessen Ton fehlt oder veraltet ist; Details in `tool-voicebox`.
 5. **Musik.** Die Faehigkeit `music` liefert den Klang; heute ist das
    `acestep`, Details in `tool-ace-step`.
 6. **Render.** `vz render <ordner>` schneidet, mischt und encodiert; die
-   Endmischung zielt auf -14 LUFS (Rezept: `ffmpeg-loudnorm`). Unfertige
-   Bloecke (Text oder Ton fehlt) und Ueberlaenge verweigert der Lauf und
-   nennt die betroffenen Bloecke; mit `--allow-incomplete` beziehungsweise
-   `--allow-overflow` rendert er und warnt. Details in `tool-ffmpeg`.
+   Endmischung zielt auf -14 LUFS (Rezept: `ffmpeg-loudnorm`). Mit
+   `--captions` brennen die Wortzeiten als Untertitel ins Bild; fehlen sie,
+   wird gewarnt und ohne Untertitel gerendert. Unfertige Bloecke (Text oder
+   Ton fehlt) und Ueberlaenge verweigert der Lauf und nennt die betroffenen
+   Bloecke; mit `--allow-incomplete` beziehungsweise `--allow-overflow`
+   rendert er und warnt. Details in `tool-ffmpeg`.
 
 `vz status <ordner>` zeigt jederzeit, welche Bloecke noch offen sind.
 
 ## Was es heute noch nicht gibt
 
-- **Transkript und Captions.** Beides braucht echte Wort-Zeitstempel und
-  folgt in Etappe 2b; bis dahin werden die Bloecke von Hand geschrieben.
 - **`--fix` im Doctor.** Ein fehlendes Werkzeug wird von Hand installiert.

@@ -36,4 +36,5 @@ Der Plan landet in `project.json` (Format, `capabilities`, `delivery`) und in
 der Spezifikation.
 
 Einen `vz plan`-Befehl gibt es noch nicht. Den Plan legt der Agent als Dateien
-an; der Kern ist mit Etappe 2a da, nur Transkript und Captions folgen in 2b.
+an; der Kern ist mit Etappe 2a da, Transkript, Segmentierung und Captions sind
+mit Etappe 2b da.

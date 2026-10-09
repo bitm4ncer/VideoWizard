@@ -15,6 +15,7 @@ const verlangteSkills = [
   "skills/tools/tool-ffmpeg/SKILL.md",
   "skills/tools/tool-ace-step/SKILL.md",
   "skills/tools/tool-voicebox/SKILL.md",
+  "skills/tools/tool-whisper/SKILL.md",
   "skills/reference/blocks/SKILL.md",
   "skills/reference/video-anatomy/SKILL.md",
 ];
