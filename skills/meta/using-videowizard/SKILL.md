@@ -13,8 +13,10 @@ naechsten Schritt.
 1. **`vz doctor` laufen lassen.** Es meldet je Faehigkeit: vorhanden,
    automatisch installierbar, nur von Hand oder Schluessel noetig. Ein
    Workflow beginnt erst danach.
-2. **Passenden Planungs-Skill waehlen.** Er klaert Format, Dauer, Beats, Hook
-   und Anbieterwahl und schreibt den Plan nach `project.json` und `plan.md`.
+2. **Passenden Planungs-Skill waehlen.** Fuer die Short-Kette:
+   `reference-analysis` (Brief), `planning-short` (Beats und Hook),
+   `storyboarding` (Shotliste und Freigaben). Er klaert Format, Dauer und
+   Anbieterwahl und schreibt den Plan nach `project.json` und `plan.md`.
 3. **Passenden Produktions-Skill waehlen.** Er fuehrt aus und nennt die
    Faehigkeiten; Werkzeugdetails stehen in den Tool-Skills.
 
@@ -42,7 +44,7 @@ Ein Projekt ist ein Ordner mit `project.json` als Wahrheitsdatei;
 
 ## Als MCP
 
-Derselbe Bestand laeuft als MCP-Server: `npm --silent run mcp`. Er bietet neun
+Derselbe Bestand laeuft als MCP-Server: `npm --silent run mcp`. Er bietet zehn
 Werkzeuge: `doctor`, `status`, `ingest`, `transcribe`, `segment`, `voice`,
-`music_adopt`, `music_generate` und `render`. Jedes Werkzeug ruft denselben
-Befehl auf wie `vz` und liefert dessen Ausgabe zurueck.
+`music_adopt`, `music_generate`, `render` und `review`. Jedes Werkzeug ruft
+denselben Befehl auf wie `vz` und liefert dessen Ausgabe zurueck.

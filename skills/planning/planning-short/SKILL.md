@@ -38,3 +38,8 @@ der Spezifikation.
 Einen `vz plan`-Befehl gibt es noch nicht. Den Plan legt der Agent als Dateien
 an; der Kern ist mit Etappe 2a da, Transkript, Segmentierung und Captions sind
 mit Etappe 2b da.
+
+## Weiter
+
+Die Beats sind die Eingabe der Shotliste: `storyboarding` macht daraus die
+Shotliste und das Visuelle Thema und traegt die Freigaben in `plan.md` ein.

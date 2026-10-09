@@ -11,6 +11,11 @@ Werkzeugen: welcher Anbieter liefert, steht in `project.json` unter
 
 ## Ablauf
 
+Vor dem teuren Bau stehen die Freigaben aus `plan.md` (Abschnitt `Freigaben`):
+Story (Beats), Look (Visuelles Thema) und Storyboard (Shotliste). Bei
+Kundenarbeit sind alle drei Pflicht; bei kurzen Privatstuecken darf
+zusammengefasst werden.
+
 1. **Doctor.** `vz doctor` prueft vor jedem Lauf, welche Faehigkeiten
    abgedeckt sind. Ein fehlender Anbieter ist ein Zustand, kein Grund zu raten.
 2. **Material.** `vz ingest <ordner> <video> [--label <text>]` liest eine
@@ -38,6 +43,10 @@ Werkzeugen: welcher Anbieter liefert, steht in `project.json` unter
    Ton fehlt) und Ueberlaenge verweigert der Lauf und nennt die betroffenen
    Bloecke; mit `--allow-incomplete` beziehungsweise `--allow-overflow`
    rendert er und warnt. Details in `tool-ffmpeg`.
+7. **Nachschau.** `vz review <ordner>` prueft die neueste Ausgabe in `out/`
+   gegen den Plan und schreibt `review.md`; der Lauf berichtet nur, er
+   blockiert nie. Wiederkehrende Befunde gehen ueber `vz learn` in den
+   Lernloop.
 
 `vz status <ordner>` zeigt jederzeit, welche Bloecke noch offen sind.
 
