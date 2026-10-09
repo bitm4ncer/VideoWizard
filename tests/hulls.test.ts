@@ -2,7 +2,8 @@ import type { Dirent } from "node:fs";
 import { readFile, readdir, stat } from "node:fs/promises";
 import { join, relative, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import { runCli } from "../src/cli.js";
 
 /**
  * Die Huellen und die Installationsanleitung am Rand: geprueft wird, was ein
@@ -28,6 +29,15 @@ async function readPluginJson(): Promise<Record<string, unknown>> {
 async function isFile(path: string): Promise<boolean> {
   try {
     return (await stat(path)).isFile();
+  } catch {
+    return false;
+  }
+}
+
+/** Ob der Pfad ein Verzeichnis ist; fehlende Pfade sind keine. */
+async function isDir(path: string): Promise<boolean> {
+  try {
+    return (await stat(path)).isDirectory();
   } catch {
     return false;
   }
@@ -74,11 +84,30 @@ async function alleSkillDateien(dir: string): Promise<string[]> {
   return found;
 }
 
+/**
+ * Die Befehlsnamen aus der echten Hilfe des CLIs. Der Aufruf faehrt die
+ * Befehlsliste und faengt die Ausgabe ab.
+ */
+async function cliBefehle(): Promise<string[]> {
+  const zeilen: string[] = [];
+  const ausgabe = vi.spyOn(console, "log").mockImplementation((...parts: unknown[]) => {
+    zeilen.push(parts.map(String).join(" "));
+  });
+  try {
+    expect(await runCli(["help"])).toBe(0);
+  } finally {
+    ausgabe.mockRestore();
+  }
+  // Die erste Zeile ist die Ueberschrift, danach je Befehl "  <name>  <summary>".
+  return zeilen.slice(1).map((zeile) => zeile.trim().split(/\s+/)[0] ?? "");
+}
+
 /** Die neuen Dateien, fuer die die Geviertstrich-Regel gilt. */
 const neueDateien = [
   ".claude-plugin/plugin.json",
   ".opencode/plugins/videowizard.js",
   "docs/install.md",
+  "docs/migration-map.md",
   "README.md",
 ];
 
@@ -177,6 +206,45 @@ describe("die README", () => {
     const readme = await readFile(repoFile("README.md"), "utf8");
     expect(readme).toContain("npm --silent run vz -- doctor");
     expect(readme).toContain("npm --silent run mcp");
+  });
+});
+
+describe("die Migrationskarte", () => {
+  it("existiert, nennt die drei Zustaende und den Pfad der VideoPipeline", async () => {
+    const karte = await readFile(repoFile("docs/migration-map.md"), "utf8");
+    for (const zustand of ["uebertragen", "offen", "bewusst nicht"]) {
+      expect(karte, zustand).toContain(zustand);
+    }
+    expect(karte).toContain("C:\\GitHub\\VideoPipeline");
+  });
+
+  it("nennt nur Befehle der CLI-Liste und nur Skills, die es im Repo gibt", async () => {
+    const karte = await readFile(repoFile("docs/migration-map.md"), "utf8");
+
+    // Befehle stehen als `vz <name>` im Text; Fliesstext ohne Backticks zaehlt
+    // nicht. Ein Name folgt direkt auf "vz " und besteht aus Kleinbuchstaben.
+    const befehle = [...karte.matchAll(/`vz ([a-z][a-z-]*)[^`\n]*`/g)].map(
+      (treffer) => treffer[1] as string,
+    );
+    expect(befehle.length, "genannte Befehle").toBeGreaterThan(0);
+    const bekannt = await cliBefehle();
+    expect(bekannt.length, "CLI-Befehle").toBeGreaterThan(0);
+    for (const befehl of befehle) {
+      expect(bekannt, befehl).toContain(befehl);
+    }
+
+    // Skills stehen als `skills/<pfad>` im Text; ein angehaengtes `/SKILL.md`
+    // wird toleriert, geprueft wird der Ordner mit seiner SKILL.md.
+    const skills = [...karte.matchAll(/`(skills\/[A-Za-z0-9._-]+(?:\/[A-Za-z0-9._-]+)*)`/g)].map(
+      (treffer) => treffer[1] as string,
+    );
+    expect(skills.length, "genannte Skills").toBeGreaterThan(0);
+    for (const skill of skills) {
+      const ordner = skill.replace(/\/SKILL\.md$/, "");
+      const basis = repoFile(ordner);
+      expect(await isDir(basis), ordner).toBe(true);
+      expect(await isFile(join(basis, "SKILL.md")), ordner).toBe(true);
+    }
   });
 });
 
