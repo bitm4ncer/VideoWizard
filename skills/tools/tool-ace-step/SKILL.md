@@ -11,9 +11,10 @@ lokale Server wird per HTTP auf Port 8001 angesprochen.
 ## Erkennen
 
 - Der Doctor fuehrt die Faehigkeit `music`: Er meldet "vorhanden (Dienst:
-  acestep)", wenn die echte Dienst-Erkennung des Anbieters anschlaegt, sonst
-  "nur von Hand (acestep)". Den frueher benutzten `acestep-api --help`-Proxy
-  gibt es nicht mehr.
+  acestep)", wenn die echte Dienst-Erkennung des Anbieters anschlaegt. Sonst
+  entscheidet der zweite Anbieter `elevenlabs` (siehe `tool-elevenlabs`);
+  ohne beide gilt "nur von Hand (acestep)". Den frueher benutzten
+  `acestep-api --help`-Proxy gibt es nicht mehr.
 - Der Anbieter selbst prueft den Server mit `GET /health`. Antwortet er nicht
   oder nicht mit HTTP 200, ist der Dienst nicht bereit; ein fehlender Dienst
   wirft nicht.
@@ -49,9 +50,12 @@ geraten):
 4. Jede Antwort steckt in der Huelle `{ data, code, error }`; ein gesetztes
    `error` ist ein Fehler, auch bei HTTP 200.
 
-Ein `vz music`-Befehl existiert noch nicht. Wie die Datei in ein Projekt
-kommt, entscheidet der Workflow, nicht der Anbieter. Pegel danach mit dem
-Baustein `ffmpeg-loudnorm` auf -16 und -14 LUFS bringen (`tool-ffmpeg`).
+`vz music <ordner> generate --prompt "<text>" [--seconds N] [--yes]` erzeugt
+ueber den Anbieter aus `capabilities.music`; mit `provider: acestep` landet
+der Take als WAV unter `audio/music.wav`. Ohne `--seconds` ist die Laenge die
+Summe der Stimmdauern und Pausen. Eine vorhandene Datei uebernimmt
+`vz music <ordner> <datei>`. Pegel danach mit dem Baustein `ffmpeg-loudnorm`
+auf -16 und -14 LUFS bringen (`tool-ffmpeg`).
 
 ## Grenzen
 

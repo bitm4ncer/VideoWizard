@@ -13,8 +13,9 @@ gemeinsamen Sprach-Vertrag. Der lokale Server wird per HTTP unter
 
 `vz doctor` fuehrt die Faehigkeit `voice` und fragt die echte
 Dienst-Erkennung des Anbieters ab; die prueft den Server mit `GET /health`.
-Antwortet er, meldet der Doctor "vorhanden (Dienst: voicebox)"; sonst "nur
-von Hand (voicebox)". Ein fehlender Dienst wirft nicht.
+Antwortet er, meldet der Doctor "vorhanden (Dienst: voicebox)". Sonst
+entscheidet der zweite Anbieter `elevenlabs` (siehe `tool-elevenlabs`);
+ohne beide gilt "nur von Hand (voicebox)". Ein fehlender Dienst wirft nicht.
 
 ## Installieren
 

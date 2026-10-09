@@ -25,8 +25,12 @@ Werkzeugen: welcher Anbieter liefert, steht in `project.json` unter
    aus der Aufnahme entstehen; Details in `tool-whisper`.
 4. **Stimme.** `vz voice <ordner>` vertont jeden Block, dessen Text da ist
    und dessen Ton fehlt oder veraltet ist; Details in `tool-voicebox`.
-5. **Musik.** Die Faehigkeit `music` liefert den Klang; heute ist das
-   `acestep`, Details in `tool-ace-step`.
+5. **Musik.** Die Faehigkeit `music` liefert den Klang; `vz music` bekommt
+   entweder eine Datei (`vz music <ordner> <datei>`) oder erzeugt das Bett
+   (`vz music <ordner> generate --prompt "..." [--seconds N] [--yes]`).
+   Erzeugen kostet Geld und laeuft nur mit `--yes`; ohne `--seconds` gilt die
+   Summe der Stimmdauern und Pausen. Details: `tool-ace-step` (lokal) und
+   `tool-elevenlabs` (Schluessel).
 6. **Render.** `vz render <ordner>` schneidet, mischt und encodiert; die
    Endmischung zielt auf -14 LUFS (Rezept: `ffmpeg-loudnorm`). Mit
    `--captions` brennen die Wortzeiten als Untertitel ins Bild; fehlen sie,
