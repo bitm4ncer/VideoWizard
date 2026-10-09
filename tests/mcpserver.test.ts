@@ -48,12 +48,12 @@ async function connect(
 }
 
 describe("MCP-Server ueber In-Memory-Transport", () => {
-  it("meldet die zehn Werkzeuge, die listTools liefert", async () => {
+  it("meldet die elf Werkzeuge, die listTools liefert", async () => {
     const { client, close } = await connect();
     try {
       const { tools } = await client.listTools();
       expect(tools.map((tool) => tool.name)).toEqual(listTools().map((tool) => tool.name));
-      expect(tools).toHaveLength(10);
+      expect(tools).toHaveLength(11);
 
       const status = tools.find((tool) => tool.name === "status");
       expect(status?.inputSchema["type"]).toBe("object");

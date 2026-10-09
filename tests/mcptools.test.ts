@@ -10,7 +10,7 @@ function resultText(result: { content: Array<{ type: string; text: string }> }):
 }
 
 describe("listTools", () => {
-  it("Fall 1: nennt genau die zehn Werkzeuge mit Beschreibung und Schema", () => {
+  it("Fall 1: nennt genau die elf Werkzeuge mit Beschreibung und Schema", () => {
     const tools = listTools();
     expect(tools.map((tool) => tool.name)).toEqual([
       "doctor",
@@ -23,6 +23,7 @@ describe("listTools", () => {
       "music_generate",
       "render",
       "review",
+      "handoff",
     ]);
     for (const tool of tools) {
       expect(tool.description.length).toBeGreaterThan(0);
@@ -44,10 +45,16 @@ describe("listTools", () => {
     expect(required("music_generate")).toEqual(["dir", "prompt"]);
     expect(required("render")).toEqual(["dir"]);
     expect(required("review")).toEqual(["dir"]);
+    expect(required("handoff")).toEqual(["dir"]);
     const reviewProperties = schemas.get("review")?.["properties"] as
       | Record<string, { type?: string }>
       | undefined;
     expect(reviewProperties?.["captions"]?.type).toBe("boolean");
+    const handoffProperties = schemas.get("handoff")?.["properties"] as
+      | Record<string, { type?: string }>
+      | undefined;
+    expect(handoffProperties?.["out"]?.type).toBe("string");
+    expect(handoffProperties?.["force"]?.type).toBe("boolean");
   });
 });
 
@@ -128,6 +135,10 @@ describe("callTool: Fehler der Eingabe", () => {
     const review = await callTool("review", {}, { runCli });
     expect(review.isError).toBe(true);
     expect(resultText(review)).toContain("dir");
+
+    const handoff = await callTool("handoff", {}, { runCli });
+    expect(handoff.isError).toBe(true);
+    expect(resultText(handoff)).toContain("dir");
     expect(called).toBe(false);
   });
 
@@ -194,6 +205,13 @@ describe("callTool: argv je Werkzeug", () => {
     ],
     ["review", { dir: "d" }, ["review", "d"]],
     ["review", { dir: "d", captions: true }, ["review", "d", "--captions"]],
+    ["handoff", { dir: "d" }, ["handoff", "d"]],
+    ["handoff", { dir: "d", out: "o" }, ["handoff", "d", "--out", "o"]],
+    [
+      "handoff",
+      { dir: "d", out: "o", force: true },
+      ["handoff", "d", "--out", "o", "--force"],
+    ],
   ];
 
   for (const [name, args, expected] of mappings) {

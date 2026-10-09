@@ -261,6 +261,32 @@ const SPECS: ToolSpec[] = [
       return argv;
     },
   },
+  {
+    name: "handoff",
+    description:
+      "Generate a one-way Diffusion Studio project folder from this project. " +
+      "With force, replace an existing target folder.",
+    args: {
+      dir: { type: "string", description: "Project folder.", required: true },
+      out: {
+        type: "string",
+        description: "Target folder; defaults to handoff/diffusion-studio in the project.",
+        required: false,
+      },
+      force: {
+        type: "boolean",
+        description: "Replace an existing target folder.",
+        required: false,
+      },
+    },
+    build: (args) => {
+      const argv = ["handoff", needString(args, "dir")];
+      const out = optString(args, "out");
+      if (out !== undefined) argv.push("--out", out);
+      if (optBool(args, "force")) argv.push("--force");
+      return argv;
+    },
+  },
 ];
 
 /** Baut das JSON-Schema eines Werkzeugs aus seinen Argumenten. */

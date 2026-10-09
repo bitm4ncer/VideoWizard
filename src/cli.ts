@@ -1,5 +1,6 @@
 import { pathToFileURL } from "node:url";
 import { doctorCommand } from "./commands/doctor.js";
+import { handoffCommand } from "./commands/handoff.js";
 import { ingestCommand } from "./commands/ingest.js";
 import { learnCommand } from "./commands/learn.js";
 import { musicCommand } from "./commands/music.js";
@@ -33,6 +34,7 @@ const commands: Command[] = [
   musicCommand,
   renderCommand,
   reviewCommand,
+  handoffCommand,
   doctorCommand,
   learnCommand,
   {
