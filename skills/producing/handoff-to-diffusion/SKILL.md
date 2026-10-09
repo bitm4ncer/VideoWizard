@@ -50,8 +50,7 @@ stempelt beim Oeffnen eigene Felder; die gelieferten bleiben unberuehrt.
 
 ## Grenze
 
-Live verifiziert (10.10.2026): Oeffnen, `check` ohne Befund, der Trim der
-take-Frames und das Bild des still-Blocks; letzteres aber nur, soweit sich
-Standbilder live pruefen liessen, sonst zaehlt es wie der Rest.
-Quellcodegetestet, nicht in der App live geprueft: still-Bild (ohne
-Live-Pruefung), Audio und Captions.
+Live verifiziert (10.10.2026): Oeffnen, `check` ohne Befund sowie der Trim
+und die Frames der `take`-Bloecke.
+Nur quellcodegetestet, nicht in der App live geprueft: Standbilder der
+`still`-Bloecke, Audio und Captions.
