@@ -1,11 +1,16 @@
 import { randomUUID } from "node:crypto";
 import { mkdir, readFile, readdir, rename, rm, stat, writeFile } from "node:fs/promises";
 import { dirname, join, resolve, sep } from "node:path";
+import { toCues } from "./captions.js";
 import { runFfmpeg } from "./ffmpeg.js";
+import { computeFit } from "./fit.js";
 import { projectPaths } from "./paths.js";
 import { loadProject } from "./project.js";
+import { mapWordsToOutput, remainingRanges } from "./renderplan.js";
 import type { Stats } from "node:fs";
 import type { RunFn } from "./ffmpeg.js";
+import type { FitResult } from "./fit.js";
+import type { VideoSegment } from "./renderplan.js";
 import type { Block, Project } from "./types.js";
 import type { TranscriptWord } from "./providers/transcript.js";
 
@@ -14,12 +19,17 @@ import type { TranscriptWord } from "./providers/transcript.js";
  * wird ein DS-Projektordner (JSX). Die DS-Konventionen stammen aus der
  * installierten Doku (JSX-Referenz der App), nicht aus Vermutungen: eine
  * Szene je Block, absolute Medienpfade, Wortzeiten als Untertiteldatei.
+ * Traegt ein take-Block ein Fit-Ergebnis der Sync-Logik, folgt der Aufbau
+ * dem Renderer: behaltene Bereiche als getrimmte Videos in einer sequence,
+ * Haltebilder als extrahierte Frames, Captions auf der Ausgangsachse.
  */
 
 /** Die Medien einer Handoff-Fassung; alle Pfade absolut mit Schraegstrichen. */
 export interface HandoffMedia {
   /** Je Block-ID das Bild: der Film der Quelle bei take, das PNG bei still. */
   pictures: Map<string, string>;
+  /** Je Block-ID das extrahierte Haltebild; fehlt ohne fit hold mit Halteanteil. */
+  holds: Map<string, string>;
   /** Je Block-ID die Tondatei der Vertonung; fehlt bei Bloecken ohne tts.file. */
   audio: Map<string, string>;
   /** Je Block-ID die Untertiteldatei; fehlt ohne Wortzeiten im Blockbereich. */
@@ -62,13 +72,47 @@ function stillDuration(block: Block): number {
 }
 
 /**
+ * Das Fit-Ergebnis eines Blocks, wenn er eines traegt: nur take-Bloecke mit
+ * gelaufenem Sync und Vertonung. Sonst null, dann bleibt das Altverhalten
+ * ueber das Blockfenster. Die Werte kommen aus computeFit, nicht aus einer
+ * zweiten Rechnung.
+ */
+function fitForBlock(block: Block): FitResult | null {
+  if (block.kind !== "take" || block.fit === "none" || block.tts === undefined) return null;
+  return computeFit(block, block.tts.duration);
+}
+
+/**
+ * Die Bildwerte eines fit-treuen Blocks in der Form des Render-Plans: die
+ * Bereiche aus der Bereichsfunktion des Renderers, Tempo, Halteanteil und
+ * Zieldauer mit denselben gerundeten Werten wie dort. `mapWordsToOutput`
+ * liest Bereiche und Tempo, damit die Captions auf derselben Achse liegen.
+ */
+function fitSegment(block: Block, fit: FitResult, sourceFile: string): VideoSegment {
+  return {
+    blockId: block.id,
+    kind: block.kind,
+    sourceId: block.source_id,
+    sourceFile,
+    ranges: remainingRanges(block.source_in, fit.effectiveOut, fit.cuts),
+    freezeAt: null,
+    speed: Number(fit.speed.toFixed(3)),
+    freeze: Number(fit.freeze.toFixed(3)),
+    duration: Number(fit.targetDuration.toFixed(3)),
+  };
+}
+
+/**
  * Baut die index.tsx: je Block eine Szene, die erste aktiv (sonst oeffnet DS
- * auf einer leeren Timeline). take wird ein video, das per sourceIn/sourceOut
- * auf den Quellbereich getrimmt ist; start bleibt 0, damit Bild, Ton und
- * Untertitel auf der Szenenachse zusammenpassen. Der Quellton ist stumm, weil
- * der Schnittplan ihn nicht uebernimmt. still ein image des extrahierten
- * Frames, dazu audio und captions, wo Medien vorliegen. Overlays sind in v1
- * ausgenommen.
+ * auf einer leeren Timeline). Ein take-Block mit Fit-Ergebnis wird eine
+ * sequence: je behaltenem Bereich ein stummes, per sourceIn/sourceOut
+ * getrimmtes video mit explizitem start auf der Ausgangsachse, dazu bei hold
+ * das extrahierte Haltebild als image bis zur Zieldauer; die sequence endet
+ * auf der Zieldauer der Sync-Logik. Ohne Fit-Ergebnis bleibt es beim einen
+ * video ueber das Blockfenster (overflow: Bildfenster wie bisher). Der
+ * Quellton ist stumm, weil der Schnittplan ihn nicht uebernimmt. still ein
+ * image des extrahierten Frames, dazu audio und captions, wo Medien
+ * vorliegen. Overlays sind in v1 ausgenommen.
  */
 export function buildIndexTsx(project: Project, media: HandoffMedia): string {
   const { width, height } = project.format;
@@ -88,7 +132,45 @@ export function buildIndexTsx(project: Project, media: HandoffMedia): string {
       `      <scene id=${attr(block.id)} width={${width}} height={${height}} ` +
       `fill="black"${active}>`,
     );
-    if (block.kind === "take") {
+    const fit = fitForBlock(block);
+    if (fit !== null && fit.fit !== "overflow") {
+      const segment = fitSegment(block, fit, picture);
+      if (segment.ranges.length === 0) {
+        throw new Error(
+          `Hand-off fuer Block ${block.id}: kein verbleibender Bildbereich.`,
+        );
+      }
+      lines.push(
+        `        <sequence id=${attr(`${block.id}-sequence`)} ` +
+        `end={${num(segment.duration)}}>`,
+      );
+      // Die Doku verlangt je Kind einen expliziten start; das Tempo traegt
+      // nur ein hold-Block.
+      let start = 0;
+      segment.ranges.forEach(([from, to], rangeIndex) => {
+        const rate = Math.abs(segment.speed - 1) > 0.001
+          ? ` playbackRate={${num(segment.speed)}}`
+          : "";
+        lines.push(
+          `          <video id=${attr(`${block.id}-video-${rangeIndex + 1}`)} ` +
+          `src=${attr(picture)} sourceIn={${num(from)}} sourceOut={${num(to)}} ` +
+          `start={${num(start)}}${rate} width={${width}} height={${height}} muted />`,
+        );
+        start += to - from;
+      });
+      if (fit.fit === "hold" && segment.freeze > 0.001) {
+        const hold = media.holds.get(block.id);
+        if (hold === undefined) {
+          throw new Error(`Hand-off fuer Block ${block.id}: der Halteframe fehlt.`);
+        }
+        lines.push(
+          `          <image id=${attr(`${block.id}-hold`)} src=${attr(hold)} ` +
+          `start={${num(segment.duration - segment.freeze)}} ` +
+          `end={${num(segment.duration)}} width={${width}} height={${height}} />`,
+        );
+      }
+      lines.push("        </sequence>");
+    } else if (block.kind === "take") {
       lines.push(
         `        <video id=${attr(`${block.id}-video`)} src=${attr(picture)} ` +
         `sourceIn={${num(block.source_in)}} sourceOut={${num(block.source_out)}} ` +
@@ -143,10 +225,19 @@ function srtTime(seconds: number): string {
   return `${two(hours)}:${two(mins)}:${two(secs)},${String(millis).padStart(3, "0")}`;
 }
 
+/** Die fertigen Cues als SRT; beide Wege, mit und ohne Fit, schreiben so. */
+function cuesToSrt(cues: Array<{ start: number; end: number; text: string }>): string {
+  const lines: string[] = [];
+  cues.forEach((cue, index) => {
+    lines.push(String(index + 1), `${srtTime(cue.start)} --> ${srtTime(cue.end)}`, cue.text, "");
+  });
+  return lines.join("\n");
+}
+
 /**
- * Die Wortzeiten eines take-Blocks als SRT auf der Szenenachse: nur Woerter,
- * die den Blockbereich beruehren, verschoben um source_in und an den Raendern
- * gekuerzt. Ohne Woerter im Bereich kommt null zurueck.
+ * Die Wortzeiten eines take-Blocks ohne Fit als SRT auf der Szenenachse: nur
+ * Woerter, die den Blockbereich beruehren, verschoben um source_in und an den
+ * Raendern gekuerzt. Ohne Woerter im Bereich kommt null zurueck.
  */
 function srtForBlock(block: Block, words: TranscriptWord[]): string | null {
   const from = block.source_in;
@@ -165,12 +256,23 @@ function srtForBlock(block: Block, words: TranscriptWord[]): string | null {
     });
   }
   if (cues.length === 0) return null;
+  return cuesToSrt(cues);
+}
 
-  const lines: string[] = [];
-  cues.forEach((cue, index) => {
-    lines.push(String(index + 1), `${srtTime(cue.start)} --> ${srtTime(cue.end)}`, cue.text, "");
-  });
-  return lines.join("\n");
+/**
+ * Die Wortzeiten eines fit-treuen take-Blocks als SRT auf der Ausgangsachse:
+ * dieselbe Abbildung wie der ASS-Render (mapWordsToOutput, toCues). Was in
+ * einem entfernten Schnitt liegt, belegt keine Zeit mehr, und kein Cue
+ * reicht ueber den Schnittpunkt hinaus. Ohne Woerter im Bereich kommt null
+ * zurueck.
+ */
+function srtForFit(
+  block: Block, fit: FitResult, words: TranscriptWord[], sourceFile: string,
+): string | null {
+  const segment = fitSegment(block, fit, sourceFile);
+  const cues = toCues(mapWordsToOutput(segment, words), 0);
+  if (cues.length === 0) return null;
+  return cuesToSrt(cues);
 }
 
 /**
@@ -198,9 +300,12 @@ async function loadWords(projectDir: string, sourceId: string): Promise<Transcri
   return parsed as TranscriptWord[];
 }
 
-/** Das README des Hand-offs: die Einweg-Regel, der Oeffnen-Hinweis, v1-Grenzen. */
+/** Das README des Hand-offs: die Einweg-Regel, der Oeffnen-Hinweis, die Grenzen. */
 function buildReadme(project: Project, target: string): string {
-  return [
+  const overflowing = project.blocks
+    .filter((block) => fitForBlock(block)?.fit === "overflow")
+    .map((block) => block.id);
+  const lines = [
     `# Hand-off: ${project.title}`,
     "",
     "Einweg: nach dem Hand-off ist Diffusion Studio fuer dieses Projekt der Master; " +
@@ -208,10 +313,20 @@ function buildReadme(project: Project, target: string): string {
     "",
     `Oeffnen: \`diffusion open ${posixPath(target)}\` oder den Ordner in der App oeffnen.`,
     "",
-    "Nicht uebernommen (v1): Overlays des Schnittplans, Musik, Outro und die " +
-    "Fit-Schnitte der Sync-Logik.",
+    "Uebernommen: Schnittfenster je Block, Fit-Schnitte der Sync-Logik " +
+    "(getrimmte Bereiche, Haltebilder) und Captions auf der Ausgangsachse.",
     "",
-  ].join("\n");
+    "Nicht uebernommen (v1): Overlays des Schnittplans, Musik, Outro.",
+    "",
+  ];
+  if (overflowing.length > 0) {
+    lines.push(
+      `Warnung: Ueberlaenge bei ${overflowing.join(", ")}; das Bildfenster bleibt wie ` +
+      "gewaehlt, der Ton laeuft gegebenenfalls laenger als das Bild.",
+      "",
+    );
+  }
+  return lines.join("\n");
 }
 
 function errorText(error: unknown): string {
@@ -249,8 +364,9 @@ async function targetState(path: string): Promise<"missing" | "empty" | "full"> 
  * Ganzes an seinen Platz: ein Fehler hinterlaesst keinen Mischzustand. Ein
  * belegter Zielordner wird verweigert, nur mit force ersetzt. Ziele im
  * Projekt selbst oder in seinen Medienquellen lehnt er immer ab. Standbilder
- * werden per ffmpeg extrahiert; Wortzeiten werden zu SRT-Dateien. Fehlen die
- * Wortzeiten, wird gewarnt und ohne Untertitel gebaut, kein Fehler.
+ * und die Haltebilder der fit-hold-Bloecke werden per ffmpeg extrahiert;
+ * Wortzeiten werden zu SRT-Dateien. Fehlen die Wortzeiten, wird gewarnt und
+ * ohne Untertitel gebaut, kein Fehler.
  */
 export async function renderHandoff(
   projectDir: string,
@@ -306,12 +422,14 @@ export async function renderHandoff(
 
     const media: HandoffMedia = {
       pictures: new Map(),
+      holds: new Map(),
       audio: new Map(),
       captions: new Map(),
     };
 
-    // Standbilder zuerst: erst die extrahierten Frames machen aus einem
-    // still-Block ein bildfaehiges <image>.
+    // Standbilder und Haltebilder zuerst: erst die extrahierten Frames machen
+    // aus einem still-Block ein bildfaehiges <image> und aus einem fit-hold-
+    // Block das Haltebild am Ende des gespielten Bildes.
     for (const block of project.blocks) {
       const source = sources.get(block.source_id);
       if (source === undefined) continue; // oben bereits geprueft
@@ -336,24 +454,53 @@ export async function renderHandoff(
         relative.push(rel);
       } else {
         media.pictures.set(block.id, posixPath(sourceFile));
+        const fit = fitForBlock(block);
+        if (fit !== null && fit.fit === "hold") {
+          const segment = fitSegment(block, fit, sourceFile);
+          if (segment.freeze > 0.001) {
+            const rel = `media/${block.id}-hold.png`;
+            try {
+              await runFfmpeg(
+                [
+                  "-y", "-ss", String(fit.effectiveOut), "-i", sourceFile,
+                  "-frames:v", "1", join(temp, rel),
+                ],
+                deps.run,
+              );
+            } catch (error) {
+              throw new Error(
+                `Halteframe ${block.id} liess sich nicht extrahieren: ${errorText(error)}`,
+                { cause: error },
+              );
+            }
+            media.holds.set(block.id, posixPath(finalPath(rel)));
+            relative.push(rel);
+          }
+        }
       }
       if (block.tts !== undefined) {
         media.audio.set(block.id, posixPath(resolve(root, block.tts.file)));
       }
     }
 
-    // Wortzeiten: je take-Block eine eigene SRT auf der Szenenachse. Die
-    // Wortdatei jeder Quelle wird einmal gelesen.
+    // Wortzeiten: je take-Block eine eigene SRT. Fit-treue Bloecke folgen
+    // der Ausgangsachse des Renderers, alle anderen dem alten Blockfenster.
+    // Die Wortdatei jeder Quelle wird einmal gelesen.
     const wordsBySource = new Map<string, TranscriptWord[]>();
     let captionFiles = 0;
     for (const block of project.blocks) {
       if (block.kind !== "take") continue;
+      const source = sources.get(block.source_id);
+      if (source === undefined) continue; // oben bereits geprueft
       let words = wordsBySource.get(block.source_id);
       if (words === undefined) {
         words = await loadWords(root, block.source_id);
         wordsBySource.set(block.source_id, words);
       }
-      const srt = srtForBlock(block, words);
+      const fit = fitForBlock(block);
+      const srt = fit !== null && fit.fit !== "overflow"
+        ? srtForFit(block, fit, words, resolve(root, source.file))
+        : srtForBlock(block, words);
       if (srt === null) continue;
       const rel = `captions/${block.id}.srt`;
       await writeFile(join(temp, rel), srt, "utf8");

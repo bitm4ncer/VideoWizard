@@ -114,6 +114,7 @@ async function writeWords(
 function media(over: Partial<HandoffMedia> = {}): HandoffMedia {
   return {
     pictures: new Map([["b001", "C:/projekt/sources/s01/raw.mp4"]]),
+    holds: new Map(),
     audio: new Map(),
     captions: new Map(),
     ...over,
@@ -176,6 +177,73 @@ describe("buildIndexTsx", () => {
     expect(tsx).not.toContain("<audio");
     expect(tsx).not.toContain("<captions");
     expect(tsx.endsWith("}\n")).toBe(true);
+  });
+
+  it("baut fuer fit-trim eine sequence mit einem Video je behaltenem Bereich", () => {
+    // 10 s Bild, 3 s Stimme, Pausen [2,5] und [7,9]: der Schnitt [2,5]
+    // greift, das Blockende wandert auf 6; behalten bleiben [0,2] und [5,6].
+    const nehmen = block({
+      source_in: 0,
+      source_out: 10,
+      silences: [[2, 5], [7, 9]],
+      tts: { file: "audio/tts/b001.wav", duration: 3, hash: "hash", generated_at: "2026-10-08" },
+      fit: "trim",
+    });
+
+    const tsx = buildIndexTsx(project({ blocks: [nehmen] }), media());
+
+    // Das letzte Kind endet bei 2 + (6 - 5) = 3 = tts.duration + pause_after.
+    expect(tsx).toContain('<sequence id="b001-sequence" end={3}>');
+    expect(tsx).toContain(
+      '<video id="b001-video-1" src="C:/projekt/sources/s01/raw.mp4" ' +
+      "sourceIn={0} sourceOut={2} start={0} width={1080} height={1920} muted />",
+    );
+    expect(tsx).toContain(
+      '<video id="b001-video-2" src="C:/projekt/sources/s01/raw.mp4" ' +
+      "sourceIn={5} sourceOut={6} start={2} width={1080} height={1920} muted />",
+    );
+    expect((tsx.match(/<video/g) ?? []).length).toBe(2);
+    expect(tsx).toContain("        </sequence>");
+  });
+
+  it("setzt bei fit-hold das Haltebild als image hinter das gespielte Bild", () => {
+    // 5 s Bild, 6 s Stimme: 0,9-fach verlangsamt (5,556 s), danach traegt
+    // das extrahierte Haltebild bis zur Zieldauer 6.
+    const halten = block({
+      source_in: 0,
+      source_out: 5,
+      tts: { file: "audio/tts/b001.wav", duration: 6, hash: "hash", generated_at: "2026-10-08" },
+      fit: "hold",
+    });
+
+    const tsx = buildIndexTsx(project({ blocks: [halten] }), media({
+      holds: new Map([["b001", "C:/projekt/handoff/diffusion-studio/media/b001-hold.png"]]),
+    }));
+
+    expect(tsx).toContain('<sequence id="b001-sequence" end={6}>');
+    expect(tsx).toContain(
+      '<video id="b001-video-1" src="C:/projekt/sources/s01/raw.mp4" ' +
+      "sourceIn={0} sourceOut={5} start={0} playbackRate={0.9} " +
+      "width={1080} height={1920} muted />",
+    );
+    expect(tsx).toContain(
+      '<image id="b001-hold" src="C:/projekt/handoff/diffusion-studio/media/b001-hold.png" ' +
+      "start={5.556} end={6} width={1080} height={1920} />",
+    );
+
+    // Ohne extrahierten Halteframe bricht der Aufbau mit der Block-ID ab.
+    expect(() => buildIndexTsx(project({ blocks: [halten] }), media())).toThrow(/b001/);
+  });
+
+  it("bricht bei fit-trim ohne verbleibenden Bildbereich mit der Block-ID ab", () => {
+    const leer = block({
+      source_in: 0,
+      source_out: 10,
+      tts: { file: "audio/tts/b001.wav", duration: 0, hash: "hash", generated_at: "2026-10-08" },
+      fit: "trim",
+    });
+
+    expect(() => buildIndexTsx(project({ blocks: [leer] }), media())).toThrow(/b001/);
   });
 
   it("nutzt fuer einen still-Block ein image mit der Stimmlaenge als Ende", () => {
@@ -303,9 +371,9 @@ describe("renderHandoff", () => {
       "`project.json` bleibt Schnittplan-Snapshot.",
     );
     expect(readme).toContain(`diffusion open ${posix(target)}`);
+    expect(readme).toContain("Fit-Schnitte der Sync-Logik");
     expect(readme).toContain(
-      "Nicht uebernommen (v1): Overlays des Schnittplans, Musik, Outro und die " +
-      "Fit-Schnitte der Sync-Logik.",
+      "Nicht uebernommen (v1): Overlays des Schnittplans, Musik, Outro.",
     );
 
     expect(calls.filter((call) => call.bin === "ffmpeg")).toEqual([]);
@@ -430,6 +498,90 @@ describe("renderHandoff", () => {
       `<captions id="b001-captions" src="${posix(srt)}" preset="classic" />`,
     );
     expect(warn).toEqual([]);
+  });
+
+  it("bildet Captions bei fit-trim auf die Ausgangsachse ab, ohne die Pause zu ueberdecken", async () => {
+    // Behaltene Bereiche [0,2] und [5,6]: "Schnitt" endet am Schnittpunkt
+    // (2,0), "Nach" beginnt danach (2,2). Ein Cue ueber der entfernten Pause
+    // wuerde bis 2,6 reichen und faellt damit weg.
+    const nehmen = block({
+      source_in: 0,
+      source_out: 10,
+      silences: [[2, 5], [7, 9]],
+      tts: { file: "audio/tts/b001.wav", duration: 3, hash: "hash", generated_at: "2026-10-08" },
+      fit: "trim",
+    });
+    const dir = await tempProject({ blocks: [nehmen] });
+    await writeWords(dir, "s01", [
+      { start: 0.5, end: 1, text: "Vor" },
+      { start: 1.5, end: 2.6, text: "Schnitt" },
+      { start: 5.2, end: 6, text: "Nach" },
+    ]);
+    const target = handoffDir(dir);
+    const { run } = fakeRun();
+
+    const result = await renderHandoff(dir, target, { run });
+
+    const srt = join(target, "captions", "b001.srt");
+    const lines = await readFile(srt, "utf8");
+    expect(lines).toContain("1\n00:00:00,500 --> 00:00:02,000\nVor Schnitt");
+    expect(lines).toContain("2\n00:00:02,200 --> 00:00:03,000\nNach");
+    expect(lines).not.toContain("00:00:02,600");
+    expect(result.files).toContain(srt);
+    expect(warn).toEqual([]);
+  });
+
+  it("extrahiert bei fit-hold den Frame am Ende des Bildfensters per ffmpeg", async () => {
+    const halten = block({
+      source_in: 0,
+      source_out: 5,
+      tts: { file: "audio/tts/b001.wav", duration: 6, hash: "hash", generated_at: "2026-10-08" },
+      fit: "hold",
+    });
+    const dir = await tempProject({ blocks: [halten] });
+    const target = handoffDir(dir);
+    const { calls, run } = fakeRun();
+
+    const result = await renderHandoff(dir, target, { run });
+
+    const hold = join(target, "media", "b001-hold.png");
+    const ffmpeg = calls.filter((call) => call.bin === "ffmpeg");
+    expect(ffmpeg).toHaveLength(1);
+    expect(ffmpeg[0]?.args).toEqual(expect.arrayContaining([
+      "-ss", "5", "-i", join(dir, "sources", "s01", "raw.mp4"), "-frames:v", "1",
+    ]));
+    expect(ffmpeg[0]?.args.at(-1)).toMatch(/media[\\/]b001-hold\.png$/);
+    expect((await stat(hold)).isFile()).toBe(true);
+    expect(result.files).toContain(hold);
+
+    const index = await readFile(result.index, "utf8");
+    expect(index).toContain(
+      `<image id="b001-hold" src="${posix(hold)}" start={5.556} end={6} ` +
+      "width={1080} height={1920} />",
+    );
+  });
+
+  it("laesst fit-overflow beim Bildfenster wie bisher und warnt im README", async () => {
+    const ueber = block({
+      source_in: 0,
+      source_out: 4,
+      tts: { file: "audio/tts/b001.wav", duration: 6, hash: "hash", generated_at: "2026-10-08" },
+      fit: "overflow",
+    });
+    const dir = await tempProject({ blocks: [ueber] });
+    const target = handoffDir(dir);
+    const { calls, run } = fakeRun();
+
+    const result = await renderHandoff(dir, target, { run });
+
+    const index = await readFile(result.index, "utf8");
+    expect(index).toContain("sourceIn={0} sourceOut={4}");
+    expect(index).not.toContain("<sequence");
+    expect(calls).toEqual([]);
+
+    const readme = await readFile(join(target, "README.md"), "utf8");
+    expect(readme).toContain("Ueberlaenge bei b001");
+    expect(readme).toContain("Bildfenster bleibt wie gewaehlt");
   });
 
   it("warnt ohne Wortzeiten und laesst die Untertitel aus, ohne zu scheitern", async () => {

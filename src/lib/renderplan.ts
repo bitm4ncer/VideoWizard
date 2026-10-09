@@ -46,7 +46,7 @@ export interface RenderPlan {
 }
 
 /** Aus den Schnitten die verbleibenden Bereiche der Quelle machen. */
-function remainingRanges(
+export function remainingRanges(
   from: number, to: number, cuts: Array<[number, number]>,
 ): Array<[number, number]> {
   const ranges: Array<[number, number]> = [];
