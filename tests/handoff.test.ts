@@ -155,7 +155,7 @@ describe("handoffDir", () => {
 });
 
 describe("buildIndexTsx", () => {
-  it("macht aus einem take-Block eine Szene mit video start/end und absoluter Quelle", () => {
+  it("trimmt einen take-Block per sourceIn/sourceOut, stumm, mit absoluter Quelle", () => {
     const tsx = buildIndexTsx(
       project({ blocks: [block({ source_in: 2.5, source_out: 8 })] }),
       media(),
@@ -165,10 +165,14 @@ describe("buildIndexTsx", () => {
     expect(tsx).toContain(
       '<scene id="b001" width={1080} height={1920} fill="black" active>',
     );
+    // sourceIn/sourceOut trimmen die Quelle; start/end wuerden nur auf der
+    // Szenenachse verschieben und das Bild von Ton und Untertiteln loesen.
     expect(tsx).toContain(
       '<video id="b001-video" src="C:/projekt/sources/s01/raw.mp4" ' +
-      "start={2.5} end={8} width={1080} height={1920} />",
+      "sourceIn={2.5} sourceOut={8} width={1080} height={1920} muted />",
     );
+    expect(tsx).not.toContain("start=");
+    expect(tsx).not.toContain("end=");
     expect(tsx).not.toContain("<audio");
     expect(tsx).not.toContain("<captions");
     expect(tsx.endsWith("}\n")).toBe(true);
@@ -192,6 +196,8 @@ describe("buildIndexTsx", () => {
       "end={4} width={1080} height={1920} />",
     );
     expect(tsx).not.toContain("<video");
+    // Ein Bild traegt keinen Quellton; muted gehoert nur ans video.
+    expect(tsx).not.toContain("muted");
   });
 
   it("nimmt ohne Vertonung das Blockfenster als Standbildlaenge", () => {
@@ -280,6 +286,8 @@ describe("renderHandoff", () => {
     const index = await readFile(result.index, "utf8");
     expect(index).toContain('<scene id="b001"');
     expect(index).toContain(`src="${posix(join(dir, "sources", "s01", "raw.mp4"))}"`);
+    expect(index).toContain("sourceIn={0} sourceOut={10}");
+    expect(index).toContain("muted />");
     expect(index).toContain('<audio id="b001-audio"');
 
     const pkg = JSON.parse(await readFile(join(target, "package.json"), "utf8")) as {

@@ -63,9 +63,12 @@ function stillDuration(block: Block): number {
 
 /**
  * Baut die index.tsx: je Block eine Szene, die erste aktiv (sonst oeffnet DS
- * auf einer leeren Timeline). take wird ein video mit start/end aus dem
- * Quellbereich, still ein image des extrahierten Frames, dazu audio und
- * captions, wo Medien vorliegen. Overlays sind in v1 ausgenommen.
+ * auf einer leeren Timeline). take wird ein video, das per sourceIn/sourceOut
+ * auf den Quellbereich getrimmt ist; start bleibt 0, damit Bild, Ton und
+ * Untertitel auf der Szenenachse zusammenpassen. Der Quellton ist stumm, weil
+ * der Schnittplan ihn nicht uebernimmt. still ein image des extrahierten
+ * Frames, dazu audio und captions, wo Medien vorliegen. Overlays sind in v1
+ * ausgenommen.
  */
 export function buildIndexTsx(project: Project, media: HandoffMedia): string {
   const { width, height } = project.format;
@@ -88,8 +91,8 @@ export function buildIndexTsx(project: Project, media: HandoffMedia): string {
     if (block.kind === "take") {
       lines.push(
         `        <video id=${attr(`${block.id}-video`)} src=${attr(picture)} ` +
-        `start={${num(block.source_in)}} end={${num(block.source_out)}} ` +
-        `width={${width}} height={${height}} />`,
+        `sourceIn={${num(block.source_in)}} sourceOut={${num(block.source_out)}} ` +
+        `width={${width}} height={${height}} muted />`,
       );
     } else {
       lines.push(
