@@ -242,6 +242,14 @@ const SPECS: ToolSpec[] = [
       return argv;
     },
   },
+  {
+    name: "review",
+    description: "Check the newest output in out/ against the plan and write review.md.",
+    args: {
+      dir: { type: "string", description: "Project folder.", required: true },
+    },
+    build: (args) => ["review", needString(args, "dir")],
+  },
 ];
 
 /** Baut das JSON-Schema eines Werkzeugs aus seinen Argumenten. */

@@ -10,7 +10,7 @@ function resultText(result: { content: Array<{ type: string; text: string }> }):
 }
 
 describe("listTools", () => {
-  it("Fall 1: nennt genau die neun Werkzeuge mit Beschreibung und Schema", () => {
+  it("Fall 1: nennt genau die zehn Werkzeuge mit Beschreibung und Schema", () => {
     const tools = listTools();
     expect(tools.map((tool) => tool.name)).toEqual([
       "doctor",
@@ -22,6 +22,7 @@ describe("listTools", () => {
       "music_adopt",
       "music_generate",
       "render",
+      "review",
     ]);
     for (const tool of tools) {
       expect(tool.description.length).toBeGreaterThan(0);
@@ -42,6 +43,7 @@ describe("listTools", () => {
     expect(required("music_adopt")).toEqual(["dir", "file"]);
     expect(required("music_generate")).toEqual(["dir", "prompt"]);
     expect(required("render")).toEqual(["dir"]);
+    expect(required("review")).toEqual(["dir"]);
   });
 });
 
@@ -118,6 +120,10 @@ describe("callTool: Fehler der Eingabe", () => {
     const ingest = await callTool("ingest", { dir: "d" }, { runCli });
     expect(ingest.isError).toBe(true);
     expect(resultText(ingest)).toContain("video");
+
+    const review = await callTool("review", {}, { runCli });
+    expect(review.isError).toBe(true);
+    expect(resultText(review)).toContain("dir");
     expect(called).toBe(false);
   });
 
@@ -182,6 +188,7 @@ describe("callTool: argv je Werkzeug", () => {
       { dir: "d", captions: true, allowOverflow: true, allowIncomplete: true },
       ["render", "d", "--captions", "--allow-overflow", "--allow-incomplete"],
     ],
+    ["review", { dir: "d" }, ["review", "d"]],
   ];
 
   for (const [name, args, expected] of mappings) {

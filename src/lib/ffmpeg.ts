@@ -14,7 +14,7 @@ export interface RunResult {
 export type RunFn = (bin: string, args: string[]) => Promise<RunResult>;
 
 /** Die einzige Stelle, die einen Prozess startet. */
-const spawnRun: RunFn = (bin, args) =>
+export const spawnRun: RunFn = (bin, args) =>
   new Promise((resolve, reject) => {
     const child = spawn(bin, args, { windowsHide: true });
     child.stdout.setEncoding("utf8");
