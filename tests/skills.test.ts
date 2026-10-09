@@ -12,6 +12,7 @@ const verlangteSkills = [
   "skills/meta/using-videowizard/SKILL.md",
   "skills/meta/harvesting-learnings/SKILL.md",
   "skills/planning/planning-short/SKILL.md",
+  "skills/planning/storyboarding/SKILL.md",
   "skills/producing/making-a-short/SKILL.md",
   "skills/tools/tool-ffmpeg/SKILL.md",
   "skills/tools/tool-ace-step/SKILL.md",
