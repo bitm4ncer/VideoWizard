@@ -2,12 +2,16 @@
  * Der gemeinsame Vertrag der Musikquellen (Spezifikation Abschnitt 4).
  *
  * Ein Workflow kennt nur die Faehigkeit "Musik"; welcher Anbieter sie
- * erfuellt, steht in `project.capabilities.music`. Heute gibt es nur
- * ACE-Step. Weitere Anbieter implementieren denselben Vertrag.
+ * erfuellt, steht in `project.capabilities.music`. ACE-Step und ElevenLabs
+ * implementieren denselben Vertrag.
  */
 
 import type { Project } from "../types.js";
 import { acestepProvider, toAcestepOptions } from "./acestep.js";
+import {
+  elevenlabsMusicProvider,
+  toElevenLabsMusicOptions,
+} from "./elevenlabs_music.js";
 
 /** Wie das Netzwerk angefasst wird; einhakbar fuer Tests. */
 export type FetchLike = (input: string, init?: RequestInit) => Promise<Response>;
@@ -24,6 +28,8 @@ export interface MusicDeps {
   now?: () => number;
   /** Hoechste Wartezeit eines Laufs in Millisekunden; die Vorgabe setzt der Anbieter. */
   maxWaitMs?: number;
+  /** Die Umgebung fuer Geheimnisse; Vorgabe: process.env. Einhakbar fuer Tests. */
+  env?: Record<string, string | undefined>;
 }
 
 /** Ein Take-Wunsch an einen Musik-Anbieter. */
@@ -52,6 +58,8 @@ type MusicBuilder = (options: Record<string, unknown>, deps: MusicDeps) => Music
 /** Die bekannten Musik-Anbieter. Der Schluessel ist `capabilities.music.provider`. */
 const builders: Record<string, MusicBuilder> = {
   acestep: (options, deps) => acestepProvider(toAcestepOptions(options), deps),
+  elevenlabs: (options, deps) =>
+    elevenlabsMusicProvider(toElevenLabsMusicOptions(options), deps),
 };
 
 /**
