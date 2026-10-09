@@ -202,14 +202,17 @@ describe("callTool: die Konsole wird zurueckgesetzt", () => {
   it("Fall 9: nach dem Aufruf ist console.log wieder die Originalfunktion", async () => {
     const log = console.log;
     const error = console.error;
+    const warn = console.warn;
     await callTool("doctor", {}, { runCli: async () => 0 });
     expect(console.log).toBe(log);
     expect(console.error).toBe(error);
+    expect(console.warn).toBe(warn);
   });
 
   it("stellt die Konsole auch nach einem Fehler wieder her", async () => {
     const log = console.log;
     const error = console.error;
+    const warn = console.warn;
     await callTool("doctor", {}, {
       runCli: async () => {
         throw new Error("kaputt");
@@ -217,5 +220,19 @@ describe("callTool: die Konsole wird zurueckgesetzt", () => {
     });
     expect(console.log).toBe(log);
     expect(console.error).toBe(error);
+    expect(console.warn).toBe(warn);
+  });
+
+  it("faengt console.warn auf und stellt sie danach wieder her", async () => {
+    const warn = console.warn;
+    const result = await callTool("doctor", {}, {
+      runCli: async () => {
+        console.warn("Warnung: Outro fehlt");
+        return 0;
+      },
+    });
+    expect(result.isError).toBeUndefined();
+    expect(resultText(result)).toContain("Warnung: Outro fehlt");
+    expect(console.warn).toBe(warn);
   });
 });

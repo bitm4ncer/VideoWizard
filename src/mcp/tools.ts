@@ -5,10 +5,11 @@ import { runCli as runCliDefault } from "../cli.js";
  * `music` hat zwei Werkzeuge, music_adopt und music_generate, statt eines
  * verzweigenden Werkzeugs.
  *
- * Bruecke: Die Befehle schreiben ihre Ausgabe ueber console.log und
- * console.error. Statt sie umzubauen, ersetzt callTool die beiden Funktionen
- * fuer die Dauer des Aufrufs durch Sammler und stellt sie im finally wieder
- * her. Der zurueckgegebene Text ist genau die gesammelte Ausgabe.
+ * Bruecke: Die Befehle schreiben ihre Ausgabe ueber console.log,
+ * console.error und console.warn. Statt sie umzubauen, ersetzt callTool die
+ * drei Funktionen fuer die Dauer des Aufrufs durch Sammler und stellt sie im
+ * finally wieder her. Der zurueckgegebene Text ist genau die gesammelte
+ * Ausgabe.
  */
 
 /** Eine Werkzeugbeschreibung, wie `tools/list` sie liefert. */
@@ -275,23 +276,27 @@ interface OutputCapture {
 }
 
 /**
- * Ersetzt console.log und console.error durch Sammler. Beide schreiben in
- * dieselbe Liste, damit die Reihenfolge der Ausgabe erhalten bleibt.
+ * Ersetzt console.log, console.error und console.warn durch Sammler. Alle
+ * schreiben in dieselbe Liste, damit die Reihenfolge der Ausgabe erhalten
+ * bleibt.
  */
 function captureOutput(): OutputCapture {
   const originalLog = console.log;
   const originalError = console.error;
+  const originalWarn = console.warn;
   const lines: string[] = [];
   const collect = (...parts: unknown[]): void => {
     lines.push(parts.map(String).join(" "));
   };
   console.log = collect;
   console.error = collect;
+  console.warn = collect;
   return {
     text: () => lines.join("\n"),
     restore: () => {
       console.log = originalLog;
       console.error = originalError;
+      console.warn = originalWarn;
     },
   };
 }
