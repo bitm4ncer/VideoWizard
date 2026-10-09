@@ -57,6 +57,8 @@ export interface Block {
   pause_after: number;
   /** Ergebnis der Sync-Logik, siehe Etappe 2a, Aufgabe 2. */
   fit: Fit;
+  /** Hinweise der Segmentierung, etwa ein harter Schnitt; fehlt bei alten Bloecken. */
+  flags?: string[];
   /** Einblendungen ueber dem Bild dieses Blocks. */
   overlays: Overlay[];
 }
