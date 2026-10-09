@@ -10,17 +10,30 @@ import type { TranscriptWord } from "../lib/providers/transcript.js";
 interface SegmentArgs {
   dir: string;
   sourceId: string;
+  /** true, wenn ein erneuter Lauf ausdruecklich erlaubt ist (--force). */
+  force: boolean;
 }
 
 /**
- * Liest Ordner und Quellenkennung. Genau zwei Argumente, keine Schalter:
- * fehlende Werte und unbekannte Schalter sind Bedienfehler (null).
+ * Liest Ordner, Quellenkennung und den Schalter `--force`. Genau zwei
+ * Argumente; fehlende Werte und unbekannte Schalter sind Bedienfehler (null),
+ * kein stilles Ignorieren.
  */
 function parseSegmentArgs(args: string[]): SegmentArgs | null {
-  const [dir, sourceId] = args;
-  if (args.length !== 2 || dir === undefined || sourceId === undefined) return null;
-  if (dir.startsWith("-") || sourceId.startsWith("-")) return null;
-  return { dir, sourceId };
+  const positionals: string[] = [];
+  let force = false;
+  for (const arg of args) {
+    if (arg === "--force") {
+      force = true;
+    } else if (arg.startsWith("-")) {
+      return null;
+    } else {
+      positionals.push(arg);
+    }
+  }
+  const [dir, sourceId] = positionals;
+  if (positionals.length !== 2 || dir === undefined || sourceId === undefined) return null;
+  return { dir, sourceId, force };
 }
 
 /**
@@ -49,20 +62,36 @@ function errorText(error: unknown): string {
 }
 
 /**
- * `segment <ordner> <quelle>`: teilt das Transkript der Quelle in Bloecke und
- * haengt sie hinten an das Projekt an (kein inbox). words.json ist Pflicht;
- * fehlt silences.json, wird ohne Pausen segmentiert und gewarnt. Gespeichert
- * wird atomar ueber saveProject.
+ * `segment <ordner> <quelle> [--force]`: teilt das Transkript der Quelle in
+ * Bloecke und haengt sie hinten an das Projekt an (kein inbox). Verweist
+ * bereits ein Block auf die Quelle, verweigert der Lauf, damit ein
+ * versehentlicher zweiter Lauf die Aufnahme nicht doppelt ins Video legt;
+ * mit --force haengt er trotzdem weitere Bloecke an und warnt. words.json ist
+ * Pflicht; fehlt silences.json, wird ohne Pausen segmentiert und gewarnt.
+ * Gespeichert wird atomar ueber saveProject.
  */
 export async function runSegment(args: string[]): Promise<number> {
   const parsed = parseSegmentArgs(args);
   if (parsed === null) {
-    console.error("Aufruf: videowizard segment <ordner> <quelle>");
+    console.error("Aufruf: videowizard segment <ordner> <quelle> [--force]");
     return 2;
   }
   try {
     const project = await loadProject(parsed.dir);
     const source = sourceById(project, parsed.sourceId);
+    const alreadySegmented = project.blocks.some((block) => block.source_id === source.id);
+    if (alreadySegmented && !parsed.force) {
+      throw new Error(
+        `Quelle ${source.id} ist bereits segmentiert. ` +
+        `Erst die vorhandenen Bloecke entfernen, oder --force setzen.`,
+      );
+    }
+    if (alreadySegmented) {
+      console.warn(
+        `Warnung: Quelle ${source.id} ist bereits segmentiert; ` +
+        `haenge wegen --force weitere Bloecke an.`,
+      );
+    }
     const sourceDir = join(projectPaths(parsed.dir).sourcesDir, source.id);
 
     const wordsFile = join(sourceDir, "words.json");
@@ -103,6 +132,6 @@ export async function runSegment(args: string[]): Promise<number> {
 /** Der Befehl `segment`; eingetragen in der Befehlsliste in cli.ts. */
 export const segmentCommand = {
   name: "segment",
-  summary: "Teilt das Transkript einer Quelle in Bloecke.",
+  summary: "Teilt das Transkript einer Quelle in Bloecke; --force wiederholt den Lauf.",
   run: runSegment,
 };

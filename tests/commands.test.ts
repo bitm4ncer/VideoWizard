@@ -14,7 +14,7 @@ import { sourceChecksum } from "../src/steps/ingest.js";
 import type { RunFn } from "../src/lib/ffmpeg.js";
 import type { TranscriptWord } from "../src/lib/providers/transcript.js";
 import type { VoiceProvider } from "../src/lib/providers/voice.js";
-import type { Block, Project } from "../src/lib/types.js";
+import type { Block, Project, Source } from "../src/lib/types.js";
 
 let out: string[] = [];
 let err: string[] = [];
@@ -71,6 +71,19 @@ function words(from: number, to: number): TranscriptWord[] {
   return result;
 }
 
+/** Eine Quelle; Kennung und Anzeigename kommen ueber die Parameter. */
+function quelle(id: string, label: string): Source {
+  return {
+    id,
+    label,
+    file: `sources/${id}/raw.mp4`,
+    added: "2026-10-08",
+    duration: 100,
+    checksum: "c".repeat(32),
+    normalized: false,
+  };
+}
+
 /** Ein Projekt mit einer Quelle und den uebergebenen Bloecken. */
 function beispiel(blocks: Block[] = [], over: Partial<Project> = {}): Project {
   return {
@@ -79,15 +92,7 @@ function beispiel(blocks: Block[] = [], over: Partial<Project> = {}): Project {
     title: "Test",
     format: { fps: 30, width: 1080, height: 1920 },
     language: { recorded: "de", output: "en" },
-    sources: [{
-      id: "s01",
-      label: "Kamera A",
-      file: "sources/s01/raw.mp4",
-      added: "2026-10-08",
-      duration: 100,
-      checksum: "c".repeat(32),
-      normalized: false,
-    }],
+    sources: [quelle("s01", "Kamera A")],
     blocks,
     capabilities: {
       voice: {
@@ -534,7 +539,10 @@ describe("runIngest", () => {
 
 describe("runSegment", () => {
   it("haengt Bloecke hinten an und vergibt Kennungen nach der hoechsten vorhandenen", async () => {
-    const dir = await tempProject(beispiel([block({ id: "b004", text: "Alt" })]));
+    const dir = await tempProject(beispiel(
+      [block({ id: "b004", text: "Alt", source_id: "s02" })],
+      { sources: [quelle("s01", "Kamera A"), quelle("s02", "Kamera B")] },
+    ));
     await mkdir(join(dir, "sources", "s01"), { recursive: true });
     await writeFile(
       join(dir, "sources", "s01", "words.json"),
@@ -560,6 +568,86 @@ describe("runSegment", () => {
     expect(fresh[0]?.source_out).toBe(10);
     expect(fresh[1]?.source_in).toBe(10);
     expect(fresh[1]?.source_out).toBe(30);
+  });
+
+  it("verweigert einen erneuten Lauf und nennt Quelle und Ausweg", async () => {
+    const dir = await tempProject(beispiel([block({ id: "b001", source_id: "s01" })]));
+    await mkdir(join(dir, "sources", "s01"), { recursive: true });
+    await writeFile(
+      join(dir, "sources", "s01", "words.json"),
+      JSON.stringify(words(0, 30)),
+      "utf8",
+    );
+    await writeFile(
+      join(dir, "sources", "s01", "silences.json"),
+      JSON.stringify([[9, 11]]),
+      "utf8",
+    );
+    const vorher = await loadProject(dir);
+
+    const code = await runSegment([dir, "s01"]);
+
+    expect(code).toBe(1);
+    expect(text(err)).toContain("s01");
+    expect(text(err)).toMatch(/bereits segmentiert/);
+    expect(text(err)).toContain("entfernen");
+    expect(text(err)).toContain("--force");
+    expect(out).toEqual([]);
+    // Nichts angefasst: die Wahrheitsdatei bleibt unveraendert.
+    expect(await loadProject(dir)).toEqual(vorher);
+  });
+
+  it("haengt mit --force trotzdem erneut an und warnt", async () => {
+    const dir = await tempProject(beispiel([block({ id: "b001", source_id: "s01" })]));
+    await mkdir(join(dir, "sources", "s01"), { recursive: true });
+    await writeFile(
+      join(dir, "sources", "s01", "words.json"),
+      JSON.stringify(words(0, 30)),
+      "utf8",
+    );
+    await writeFile(
+      join(dir, "sources", "s01", "silences.json"),
+      JSON.stringify([[9, 11]]),
+      "utf8",
+    );
+
+    const code = await runSegment([dir, "s01", "--force"]);
+
+    expect(code).toBe(0);
+    expect(text(out)).toContain("2 Bloecke");
+    expect(text(warning)).toContain("s01");
+    expect(text(warning)).toContain("--force");
+    const project = await loadProject(dir);
+    // Angehaengt, nicht ersetzt: der alte Block bleibt vorn.
+    expect(project.blocks.map((entry) => entry.id)).toEqual(["b001", "b002", "b003"]);
+    expect(project.blocks[1]?.source_id).toBe("s01");
+    expect(project.blocks[2]?.source_id).toBe("s01");
+  });
+
+  it("schuetzt eine neue Quelle nicht vor der Segmentierung", async () => {
+    const dir = await tempProject(beispiel(
+      [block({ id: "b001", source_id: "s01" })],
+      { sources: [quelle("s01", "Kamera A"), quelle("s02", "Kamera B")] },
+    ));
+    await mkdir(join(dir, "sources", "s02"), { recursive: true });
+    await writeFile(
+      join(dir, "sources", "s02", "words.json"),
+      JSON.stringify(words(0, 30)),
+      "utf8",
+    );
+    await writeFile(
+      join(dir, "sources", "s02", "silences.json"),
+      JSON.stringify([[9, 11]]),
+      "utf8",
+    );
+
+    const code = await runSegment([dir, "s02"]);
+
+    expect(code).toBe(0);
+    expect(err).toEqual([]);
+    const project = await loadProject(dir);
+    expect(project.blocks.map((entry) => entry.id)).toEqual(["b001", "b002", "b003"]);
+    expect(project.blocks.slice(1).map((entry) => entry.source_id)).toEqual(["s02", "s02"]);
   });
 
   it("wirft ohne words.json mit dem Pfad", async () => {
