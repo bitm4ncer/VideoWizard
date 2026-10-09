@@ -128,4 +128,11 @@ describe("filterPath", () => {
   it("macht aus einem Windows-Pfad ein maskiertes Filterargument", () => {
     expect(filterPath("C:\\out\\captions.ass")).toBe("'C\\:/out/captions.ass'");
   });
+
+  it("maskiert eine Apostrophe ueber beide Filterebenen", () => {
+    // Erste Ebene: Quote schliessen, Backslash und Quote ausgeben, Quote
+    // wieder oeffnen; zweite Ebene: die Quote bleibt mit Backslash maskiert.
+    expect(filterPath("C:\\out\\o'brien\\captions.ass"))
+      .toBe("'C\\:/out/o'\\\\\\''brien/captions.ass'");
+  });
 });
