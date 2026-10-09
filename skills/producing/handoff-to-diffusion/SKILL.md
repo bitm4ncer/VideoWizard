@@ -26,20 +26,20 @@ legt ihn woandershin, `--force` ersetzt einen belegten Zielordner.
 
 - Je Block eine Szene; die erste Szene ist `active`, sonst oeffnet die App
   auf einer leeren Timeline.
-- `take`-Bloecke: der Quellfilm, per `sourceIn`/`sourceOut` auf
-  `source_in`/`source_out` getrimmt; der Quellton ist stumm, weil der
-  Schnittplan ihn nicht uebernimmt.
+- `take`-Bloecke folgen der Sync-Logik des Renderers: entfernte Pausen
+  werden getrimmte Bereiche einer `sequence`, verlangsamte Bloecke bekommen
+  Tempo (`playbackRate`) und ein extrahiertes Haltebild, Ueberlaenge behalten
+  das volle Bildfenster. Der Quellfilm steht per `sourceIn`/`sourceOut` auf
+  den behaltenen Bereichen, der Quellton ist stumm.
 - `still`-Bloecke: der extrahierte Frame als Bild, so lang wie die Stimme.
 - TTS-Audio je Block als eigene Tonspur, sofern vertont.
-- Captions aus den Wortzeiten, sofern die Quelle welche hat; fehlen sie,
-  wird gewarnt und ohne Untertitel gebaut.
+- Captions aus den Wortzeiten auf der Ausgangsachse des Schnitts, sofern die
+  Quelle welche hat; fehlen sie, wird gewarnt und ohne Untertitel gebaut.
 
 ## Was v1 nicht mitkommt
 
 - Overlays des Schnittplans.
 - Musik und Outro.
-- Fit-Schnitte der Sync-Logik: Pausenkuerzung, Tempo und Halte werden
-  nicht reproduziert.
 
 ## Einweg
 

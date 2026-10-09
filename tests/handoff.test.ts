@@ -157,8 +157,11 @@ describe("handoffDir", () => {
 
 describe("buildIndexTsx", () => {
   it("trimmt einen take-Block per sourceIn/sourceOut, stumm, mit absoluter Quelle", () => {
+    // segment.ts schreibt "none" in jeden neuen Block; der Hand-off folgt
+    // trotzdem dem computeFit-Ergebnis wie der Renderer: 5 s Bild, 5 s
+    // Stimme, kein Schnitt moeglich, also wandert das Blockende auf 2,5 + 5.
     const tsx = buildIndexTsx(
-      project({ blocks: [block({ source_in: 2.5, source_out: 8 })] }),
+      project({ blocks: [block({ source_in: 2.5, source_out: 8, fit: "none" })] }),
       media(),
     );
 
@@ -166,14 +169,13 @@ describe("buildIndexTsx", () => {
     expect(tsx).toContain(
       '<scene id="b001" width={1080} height={1920} fill="black" active>',
     );
-    // sourceIn/sourceOut trimmen die Quelle; start/end wuerden nur auf der
-    // Szenenachse verschieben und das Bild von Ton und Untertiteln loesen.
+    // sourceIn/sourceOut trimmen die Quelle; start platziert das Kind nach
+    // der sequence-Konvention auf der Szenenachse.
+    expect(tsx).toContain('<sequence id="b001-sequence" end={5}>');
     expect(tsx).toContain(
-      '<video id="b001-video" src="C:/projekt/sources/s01/raw.mp4" ' +
-      "sourceIn={2.5} sourceOut={8} width={1080} height={1920} muted />",
+      '<video id="b001-video-1" src="C:/projekt/sources/s01/raw.mp4" ' +
+      "sourceIn={2.5} sourceOut={7.5} start={0} width={1080} height={1920} muted />",
     );
-    expect(tsx).not.toContain("start=");
-    expect(tsx).not.toContain("end=");
     expect(tsx).not.toContain("<audio");
     expect(tsx).not.toContain("<captions");
     expect(tsx.endsWith("}\n")).toBe(true);
@@ -354,7 +356,10 @@ describe("renderHandoff", () => {
     const index = await readFile(result.index, "utf8");
     expect(index).toContain('<scene id="b001"');
     expect(index).toContain(`src="${posix(join(dir, "sources", "s01", "raw.mp4"))}"`);
-    expect(index).toContain("sourceIn={0} sourceOut={10}");
+    // 10 s Bild, 5 s Stimme ohne Pausen: der Renderer kuerzt hinten auf [0,5].
+    expect(index).toContain('<sequence id="b001-sequence" end={5}>');
+    expect(index).toContain("sourceIn={0} sourceOut={5} start={0}");
+    expect(index).not.toContain("sourceOut={10}");
     expect(index).toContain("muted />");
     expect(index).toContain('<audio id="b001-audio"');
 
@@ -472,7 +477,7 @@ describe("renderHandoff", () => {
     expect((await stat(result.index)).isFile()).toBe(true);
   });
 
-  it("legt die Wortzeiten als SRT auf die Szenenachse und nennt sie im captions-Element", async () => {
+  it("legt die Wortzeiten als SRT auf die Ausgangsachse und nennt sie im captions-Element", async () => {
     const dir = await tempProject({ blocks: [block({ source_in: 2, source_out: 8 })] });
     await writeWords(dir, "s01", [
       { start: 1, end: 1.5, text: "davor" },
@@ -485,12 +490,13 @@ describe("renderHandoff", () => {
 
     const result = await renderHandoff(dir, target, { run });
 
+    // Fit-trim auf [2,7]: "Schluss" liegt hinter dem gekuerzten Blockende
+    // und entfaellt; "Hallo" und "Welt" liegen dicht genug fuer eine Zeile.
     const srt = join(target, "captions", "b001.srt");
     const lines = await readFile(srt, "utf8");
-    expect(lines).toContain("1\n00:00:00,500 --> 00:00:01,000\nHallo");
-    expect(lines).toContain("2\n00:00:01,100 --> 00:00:01,500\nWelt");
-    expect(lines).toContain("3\n00:00:05,900 --> 00:00:06,000\nSchluss");
+    expect(lines).toContain("1\n00:00:00,500 --> 00:00:01,500\nHallo Welt");
     expect(lines).not.toContain("davor");
+    expect(lines).not.toContain("Schluss");
     expect(result.files).toContain(srt);
 
     const index = await readFile(result.index, "utf8");
@@ -561,7 +567,7 @@ describe("renderHandoff", () => {
     );
   });
 
-  it("laesst fit-overflow beim Bildfenster wie bisher und warnt im README", async () => {
+  it("folgt bei overflow dem vollen Bildfenster mit Zieldauer und warnt im README", async () => {
     const ueber = block({
       source_in: 0,
       source_out: 4,
@@ -574,9 +580,16 @@ describe("renderHandoff", () => {
 
     const result = await renderHandoff(dir, target, { run });
 
+    // Wie der Render-Plan: das volle Bildfenster als eine kindlose Range,
+    // die Szene spannt ueber die Zieldauer; kein Halteanteil.
     const index = await readFile(result.index, "utf8");
-    expect(index).toContain("sourceIn={0} sourceOut={4}");
-    expect(index).not.toContain("<sequence");
+    expect(index).toContain('<sequence id="b001-sequence" end={6}>');
+    expect(index).toContain(
+      `<video id="b001-video-1" src="${posix(join(dir, "sources", "s01", "raw.mp4"))}" ` +
+      "sourceIn={0} sourceOut={4} start={0} width={1080} height={1920} muted />",
+    );
+    expect(index).not.toContain("playbackRate");
+    expect(index).not.toContain("<image");
     expect(calls).toEqual([]);
 
     const readme = await readFile(join(target, "README.md"), "utf8");
