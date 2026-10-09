@@ -43,10 +43,11 @@ zusammengefasst werden.
    Ton fehlt) und Ueberlaenge verweigert der Lauf und nennt die betroffenen
    Bloecke; mit `--allow-incomplete` beziehungsweise `--allow-overflow`
    rendert er und warnt. Details in `tool-ffmpeg`.
-7. **Nachschau.** `vz review <ordner>` prueft die neueste Ausgabe in `out/`
-   gegen den Plan und schreibt `review.md`; der Lauf berichtet nur, er
-   blockiert nie. Wiederkehrende Befunde gehen ueber `vz learn` in den
-   Lernloop.
+7. **Nachschau.** `vz review <ordner> [--captions]` prueft die neueste
+   Ausgabe in `out/` gegen den Plan und schreibt `review.md`; der Lauf
+   berichtet nur, er blockiert nie. `--captions` nimmt fehlende Untertitel in
+   die Befunde auf; ohne den Schalter bleibt ihre Anwesenheit eine blosse
+   Messung. Wiederkehrende Befunde gehen ueber `vz learn` in den Lernloop.
 
 `vz status <ordner>` zeigt jederzeit, welche Bloecke noch offen sind.
 

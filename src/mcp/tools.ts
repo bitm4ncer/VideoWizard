@@ -244,11 +244,22 @@ const SPECS: ToolSpec[] = [
   },
   {
     name: "review",
-    description: "Check the newest output in out/ against the plan and write review.md.",
+    description:
+      "Check the newest output in out/ against the plan and write review.md. " +
+      "With captions, missing captions count as a finding.",
     args: {
       dir: { type: "string", description: "Project folder.", required: true },
+      captions: {
+        type: "boolean",
+        description: "Captions were expected for this render; report missing captions.",
+        required: false,
+      },
     },
-    build: (args) => ["review", needString(args, "dir")],
+    build: (args) => {
+      const argv = ["review", needString(args, "dir")];
+      if (optBool(args, "captions")) argv.push("--captions");
+      return argv;
+    },
   },
 ];
 

@@ -44,6 +44,10 @@ describe("listTools", () => {
     expect(required("music_generate")).toEqual(["dir", "prompt"]);
     expect(required("render")).toEqual(["dir"]);
     expect(required("review")).toEqual(["dir"]);
+    const reviewProperties = schemas.get("review")?.["properties"] as
+      | Record<string, { type?: string }>
+      | undefined;
+    expect(reviewProperties?.["captions"]?.type).toBe("boolean");
   });
 });
 
@@ -189,6 +193,7 @@ describe("callTool: argv je Werkzeug", () => {
       ["render", "d", "--captions", "--allow-overflow", "--allow-incomplete"],
     ],
     ["review", { dir: "d" }, ["review", "d"]],
+    ["review", { dir: "d", captions: true }, ["review", "d", "--captions"]],
   ];
 
   for (const [name, args, expected] of mappings) {

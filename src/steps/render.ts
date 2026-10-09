@@ -5,7 +5,9 @@ import {
   concatListLine, filterPath, musicMixFilter, outroFilter, segmentFilter, voiceFilter,
 } from "../lib/ffargs.js";
 import { buildAss, planCaptions, type Cue } from "../lib/captions.js";
-import { buildRenderPlan, type RenderPlan, type VideoSegment } from "../lib/renderplan.js";
+import {
+  buildRenderPlan, DEFAULT_CROSSFADE, type RenderPlan, type VideoSegment,
+} from "../lib/renderplan.js";
 import { loadProject } from "../lib/project.js";
 import { projectPaths } from "../lib/paths.js";
 import { verifySources } from "./ingest.js";
@@ -26,7 +28,6 @@ const DEFAULT_VOICE_LUFS = -16;
 const DEFAULT_MASTER_LUFS = -14;
 const DEFAULT_MUSIC_GAIN_DB = -22;
 const DEFAULT_DUCK_DB = -12;
-const DEFAULT_CROSSFADE = 0.5;
 
 /** Zwischenformate: yuv420p mit geraden Kanten; final wird einmal encodiert. */
 const INTERMEDIATE = [

@@ -4,7 +4,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { runReview } from "../src/commands/review.js";
 import {
-  analyzeOutput, findingsFor, latestOutput, parseLoudness, parseRanges, renderReviewMarkdown,
+  analyzeOutput, findingsFor, latestOutput, parseLoudness, parseRanges, plannedDurationOf,
+  renderReviewMarkdown,
   type ReviewMeasurements,
 } from "../src/lib/review.js";
 import { CURRENT_SCHEMA, saveProject } from "../src/lib/project.js";
@@ -120,18 +121,37 @@ const DEFECT_LOUDNESS = [
 ].join("\n");
 
 /**
- * Eingehakter run: ffprobe liefert das Projektformat, ffmpeg die Messzeilen.
- * Ohne defects ist die Messung sauber; mit defects sind alle vier Befundarten
- * angelegt.
+ * Eingehakter run: ffprobe liefert das Projektformat, ffmpeg die Messzeilen
+ * und fuer Dateien mit "outro" im Pfad die Outrodauer. Ohne defects ist die
+ * Messung sauber; mit defects sind alle vier Befundarten angelegt.
+ * `outroFails` laesst die Outro-Abfrage scheitern; `outroDuration` setzt
+ * ihre Dauer.
  */
 function fakeReviewRun(
-  options: { duration?: number; defects?: boolean } = {},
+  options: {
+    duration?: number;
+    defects?: boolean;
+    outroDuration?: number;
+    outroFails?: boolean;
+  } = {},
 ): { calls: Call[]; run: RunFn } {
   const duration = options.duration ?? 5;
   const calls: Call[] = [];
   const run: RunFn = async (bin, args): Promise<RunResult> => {
     calls.push({ bin, args: [...args] });
     if (bin === "ffprobe") {
+      const file = args[args.length - 1] ?? "";
+      if (file.includes("outro")) {
+        if (options.outroFails === true) {
+          return { stdout: "", stderr: "keine Datei", code: 1 };
+        }
+        const outroDuration = options.outroDuration ?? 2;
+        return {
+          stdout: JSON.stringify({ format: { duration: outroDuration.toFixed(6) } }),
+          stderr: "",
+          code: 0,
+        };
+      }
       if (args.includes("a:0")) {
         return { stdout: JSON.stringify({ streams: [{ codec_name: "aac" }] }), stderr: "", code: 0 };
       }
@@ -247,7 +267,7 @@ describe("analyzeOutput", () => {
     await writeFile(join(outDir, "captions.ass"), "untertitel", "utf8");
     const { calls, run } = fakeReviewRun({ duration: 12.5, defects: true });
 
-    const m = await analyzeOutput(output, { captionsExpected: true }, run);
+    const m = await analyzeOutput(output, run);
 
     expect(m).toEqual({
       duration: 12.5,
@@ -273,28 +293,64 @@ describe("analyzeOutput", () => {
     ]));
   });
 
-  it("meldet fehlende Untertitel, wenn sie erwartet sind", async () => {
+  it("misst fehlende Untertitel immer, unabhaengig von einer Erwartung", async () => {
     const dir = await mkdtemp(join(tmpdir(), "vw-review-"));
     const outDir = join(dir, "out");
     await mkdir(outDir, { recursive: true });
     const output = join(outDir, "2026-10_test-01.mp4");
     await writeFile(output, "video", "utf8");
 
-    const m = await analyzeOutput(output, { captionsExpected: true }, fakeReviewRun().run);
+    const m = await analyzeOutput(output, fakeReviewRun().run);
 
     expect(m.captionsPresent).toBe(false);
   });
+});
 
-  it("ohne erwartete Untertitel gibt es keinen Untertitelbefund", async () => {
-    const dir = await mkdtemp(join(tmpdir(), "vw-review-"));
-    const outDir = join(dir, "out");
-    await mkdir(outDir, { recursive: true });
-    const output = join(outDir, "2026-10_test-01.mp4");
-    await writeFile(output, "video", "utf8");
+describe("plannedDurationOf", () => {
+  const projectDir = join(tmpdir(), "vw-review-plan");
 
-    const m = await analyzeOutput(output, { captionsExpected: false }, fakeReviewRun().run);
+  it("addiert Outrodauer minus Ueberblendung auf die Blockdauern", async () => {
+    const plan = {
+      video: [{ duration: 5 }, { duration: 2.5 }],
+      outro: { file: "outro/ende.mp4", crossfade: 0.8 },
+    };
+    const { calls, run } = fakeReviewRun({ outroDuration: 3 });
 
-    expect(m.captionsPresent).toBe(true);
+    const planned = await plannedDurationOf(plan, projectDir, run);
+
+    expect(planned.seconds).toBeCloseTo(7.5 + 3 - 0.8, 6);
+    expect(planned.outro?.included).toBe(true);
+    expect(planned.outro?.text).toContain("Outro eingerechnet");
+    expect(calls.some((call) =>
+      call.bin === "ffprobe" && call.args.at(-1) === join(projectDir, "outro", "ende.mp4"),
+    )).toBe(true);
+  });
+
+  it("nimmt den Vorgabewert 0.5 s, wenn das Projekt keine Ueberblendung nennt", async () => {
+    const plan = { video: [{ duration: 5 }], outro: { file: "outro/ende.mp4" } };
+
+    const planned = await plannedDurationOf(plan, projectDir, fakeReviewRun({ outroDuration: 2 }).run);
+
+    expect(planned.seconds).toBeCloseTo(6.5, 6);
+  });
+
+  it("laesst ein nicht messbares Outro draussen und sagt das", async () => {
+    const plan = { video: [{ duration: 5 }], outro: { file: "outro/fehlt.mp4" } };
+
+    const planned = await plannedDurationOf(plan, projectDir, fakeReviewRun({ outroFails: true }).run);
+
+    expect(planned.seconds).toBe(5);
+    expect(planned.outro?.included).toBe(false);
+    expect(planned.outro?.text).toContain("Outro nicht eingerechnet");
+    expect(planned.outro?.text).toContain("outro/fehlt.mp4");
+  });
+
+  it("laesst die Blockdauern ohne Outro unveraendert", async () => {
+    const plan = { video: [{ duration: 5 }], outro: null };
+
+    const planned = await plannedDurationOf(plan, projectDir, fakeReviewRun().run);
+
+    expect(planned).toEqual({ seconds: 5, outro: null });
   });
 });
 
@@ -336,11 +392,38 @@ describe("findingsFor", () => {
     expect(findings[0]).toContain("2.50");
   });
 
-  it("meldet fehlende Untertitel", () => {
-    const findings = findingsFor(measurements({ captionsPresent: false }), 5, -14);
+  it("meldet fehlende Untertitel nur mit --captions", () => {
+    const erwartet = findingsFor(
+      measurements({ captionsPresent: false }), 5, -14, { captionsExpected: true },
+    );
 
-    expect(findings).toHaveLength(1);
-    expect(findings[0]).toContain("Untertitel");
+    expect(erwartet).toHaveLength(1);
+    expect(erwartet[0]).toContain("Untertitel");
+
+    const ohne = findingsFor(measurements({ captionsPresent: false }), 5, -14);
+
+    expect(ohne).toEqual([]);
+  });
+
+  it("haengt den Outro-Hinweis an den Dauerbefund, wenn das Outro fehlt", () => {
+    const findings = findingsFor(measurements({ duration: 5.6 }), 5, -14, {
+      outro: {
+        included: false,
+        text: "Outro nicht eingerechnet: outro/fehlt.mp4 fehlt oder ist nicht messbar.",
+      },
+    });
+
+    expect(findings.join(" ")).toContain("Dauer");
+    expect(findings.join(" ")).toContain("Outro nicht eingerechnet");
+  });
+
+  it("haengt bei eingerechnetem Outro nichts an den Dauerbefund", () => {
+    const findings = findingsFor(measurements({ duration: 5.6 }), 5, -14, {
+      outro: { included: true, text: "Outro eingerechnet: 2.00 s minus 0.50 s Ueberblendung." },
+    });
+
+    expect(findings.join(" ")).toContain("Dauer");
+    expect(findings.join(" ")).not.toContain("Outro");
   });
 });
 
@@ -361,6 +444,13 @@ describe("renderReviewMarkdown", () => {
         "Untertitel fehlen: captions.ass liegt nicht neben der Ausgabe.",
       ],
       "2026-10-09",
+      {
+        captionsExpected: true,
+        outro: {
+          included: false,
+          text: "Outro nicht eingerechnet: outro/fehlt.mp4 fehlt oder ist nicht messbar.",
+        },
+      },
     );
 
     expect(md).toContain("Datum: 2026-10-09");
@@ -373,16 +463,36 @@ describe("renderReviewMarkdown", () => {
     expect(md).toContain("1 LU");
     expect(md).toContain("Schwarzfenster: 2.50 s bis 3.25 s");
     expect(md).toContain("Untertitel fehlen");
+    expect(md).toContain("Untertitel: fehlen (captions.ass), erwartet");
+    expect(md).toContain("Outro nicht eingerechnet");
     expect(md).toContain("## Befunde");
+  });
+
+  it("weist ein eingerechnetes Outro und nicht erwartete Untertitel aus", () => {
+    const md = renderReviewMarkdown(
+      measurements(),
+      6.5,
+      -14,
+      [],
+      "2026-10-09",
+      {
+        outro: { included: true, text: "Outro eingerechnet: 2.00 s minus 0.50 s Ueberblendung." },
+      },
+    );
+
+    expect(md).toContain("geplant 6.50 s");
+    expect(md).toContain("Outro eingerechnet");
+    expect(md).toContain("Untertitel: vorhanden (captions.ass), nicht erwartet");
+    expect(md).toContain("plus Outro minus Ueberblendung");
   });
 });
 
 describe("runReview", () => {
-  it("nennt ohne Ordner die Nutzung und endet mit 2", async () => {
+  it("nennt ohne Ordner die Nutzung samt Schalter und endet mit 2", async () => {
     const code = await runReview([]);
 
     expect(code).toBe(2);
-    expect(text(err)).toContain("review <ordner>");
+    expect(text(err)).toContain("review <ordner> [--captions]");
     expect(out).toEqual([]);
   });
 
@@ -464,5 +574,77 @@ describe("runReview", () => {
     for (const wort of ["Dauer", "Lautheit", "Schwarzfenster", "Untertitel"]) {
       expect(md).toContain(wort);
     }
+  });
+
+  it("rechnet ein messbares Outro in die geplante Dauer ein", async () => {
+    const dir = await tempProject({ outro: { file: "outro/ende.mp4" } });
+    await mkdir(join(dir, "out"), { recursive: true });
+    await writeFile(join(dir, "out", "2026-10_test-01.mp4"), "video", "utf8");
+    // Block 5 s plus Outro 2 s minus Vorgabe-Ueberblendung 0.5 s ergibt 6.5 s.
+    const { calls, run } = fakeReviewRun({ duration: 6.5, outroDuration: 2 });
+
+    const code = await runReview([dir], {
+      run,
+      now: () => new Date("2026-10-09T12:00:00Z"),
+    });
+
+    expect(code).toBe(0);
+    const md = await readFile(join(dir, "review.md"), "utf8");
+    expect(md).toContain("geplant 6.50 s");
+    expect(md).toContain("Outro eingerechnet");
+    expect(md).not.toContain("Dauer weicht ab");
+    expect(calls.some((call) =>
+      call.bin === "ffprobe" && (call.args.at(-1) ?? "").endsWith(join("outro", "ende.mp4")),
+    )).toBe(true);
+  });
+
+  it("sagt im Bericht und im Befund, wenn das Outro nicht eingerechnet ist", async () => {
+    const dir = await tempProject({ outro: { file: "outro/fehlt.mp4" } });
+    await mkdir(join(dir, "out"), { recursive: true });
+    await writeFile(join(dir, "out", "2026-10_test-01.mp4"), "video", "utf8");
+    const { run } = fakeReviewRun({ duration: 6.5, outroFails: true });
+
+    const code = await runReview([dir], {
+      run,
+      now: () => new Date("2026-10-09T12:00:00Z"),
+    });
+
+    expect(code).toBe(0);
+    const md = await readFile(join(dir, "review.md"), "utf8");
+    expect(md).toContain("geplant 5.00 s");
+    expect(md).toContain("Dauer weicht ab");
+    expect(md).toContain("Outro nicht eingerechnet: outro/fehlt.mp4");
+    expect(md).toContain("das konfigurierte Outro ist nicht eingerechnet");
+    expect(text(out)).toContain("Outro nicht eingerechnet");
+  });
+
+  it("meldet fehlende Untertitel nur mit --captions", async () => {
+    const dir = await tempProject();
+    await mkdir(join(dir, "out"), { recursive: true });
+    await writeFile(join(dir, "out", "2026-10_test-01.mp4"), "video", "utf8");
+    const { run } = fakeReviewRun();
+
+    const ohne = await runReview([dir], {
+      run,
+      now: () => new Date("2026-10-09T12:00:00Z"),
+    });
+
+    expect(ohne).toBe(0);
+    const mdOhne = await readFile(join(dir, "review.md"), "utf8");
+    expect(mdOhne).toContain("Untertitel: fehlen (captions.ass), nicht erwartet");
+    expect(mdOhne).not.toContain("Untertitel fehlen:");
+    expect(text(out)).not.toContain("Befund: Untertitel");
+
+    out = [];
+    const mit = await runReview([dir, "--captions"], {
+      run,
+      now: () => new Date("2026-10-09T12:00:00Z"),
+    });
+
+    expect(mit).toBe(0);
+    const mdMit = await readFile(join(dir, "review.md"), "utf8");
+    expect(mdMit).toContain("Untertitel: fehlen (captions.ass), erwartet");
+    expect(mdMit).toContain("Untertitel fehlen:");
+    expect(text(out)).toContain("Befund: Untertitel fehlen");
   });
 });

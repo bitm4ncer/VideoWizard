@@ -15,7 +15,7 @@ Gemessen wird in einem eigenen Wegwerf-Projekt, nie im Zielprojekt: die
 Referenz ist kein Projektinhalt. Nur die Ergebnisse wandern weiter. Die
 vorhandenen Befehle `vz ingest`, `vz transcribe` und `vz segment` holen die
 Datei hinein, liefern Transkript und Pausen und teilen sie in Bloecke;
-`ffprobe` liefert Laenge, Bildrate und Schnittkanten.
+`ffprobe` liefert Laenge und Bildrate.
 
 ## Was gemessen wird
 
@@ -23,8 +23,8 @@ Datei hinein, liefern Transkript und Pausen und teilen sie in Bloecke;
 |---|---|
 | Wortrate | Woerter und Sprechzeit aus dem Transkript |
 | Pausen | `silences.json` aus der Transkription |
-| Schnittstruktur | Blockdauern aus der Segmentierung, Schnittkanten aus `ffprobe` |
-| Hook-Zeitpunkt | Beginn der ersten Sprache aus dem Transkript; ohne Anbieter naeherungsweise der erste Schnitt aus `ffprobe` |
+| Schnittstruktur | Blockdauern und Schnittkanten aus den Blockgrenzen der Segmentierung und den Pausen |
+| Hook-Zeitpunkt | Beginn der ersten Sprache aus dem Transkript; ohne Anbieter bleibt er ein offener Punkt |
 
 Jede Zahl bekommt Quelle und Datum; was messbar ist, wird nicht geschaetzt.
 Was fehlt, steht als offener Punkt im Ergebnis.
@@ -43,5 +43,6 @@ Was fehlt, steht als offener Punkt im Ergebnis.
 
 Wortzeiten brauchen einen Transkript-Anbieter; das Rezept in der Werkzeugkarte
 `tool-whisper` ist nachgeschlagen, nicht gegengeprueft. Ohne Anbieter bleibt
-nur die Pausen- und Strukturmessung. Das wird im `reference.md` so vermerkt
+nur die Pausen- und Strukturmessung; Wortrate und Hook-Zeitpunkt bleiben dann
+offene Punkte. Das wird im `reference.md` so vermerkt
 und nicht durch Schaetzungen ersetzt.

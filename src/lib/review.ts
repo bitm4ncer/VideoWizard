@@ -1,6 +1,8 @@
 import { stat } from "node:fs/promises";
-import { dirname, join } from "node:path";
-import { probe, runFfmpeg, spawnRun, type RunFn } from "./ffmpeg.js";
+import { dirname, join, resolve } from "node:path";
+import { probe, probeDuration, runFfmpeg, spawnRun, type RunFn } from "./ffmpeg.js";
+import { DEFAULT_CROSSFADE } from "./renderplan.js";
+import type { Outro } from "./types.js";
 
 /**
  * Die Messnachschau nach dem Render: `vz review` prueft die neueste Ausgabe
@@ -14,6 +16,87 @@ export const DEFAULT_MASTER_LUFS = -14;
 /** Die Toleranzen der Nachschau; sie stehen so auch im Bericht. */
 const DURATION_TOLERANCE = 0.5;
 const LOUDNESS_TOLERANCE = 1;
+
+/**
+ * Wie das konfigurierte Outro in die geplante Dauer eingegangen ist. Fehlt
+ * das Outro oder ist es nicht messbar, bleibt es draussen; der Text sagt das
+ * in Bericht und Befund.
+ */
+export interface OutroNote {
+  /** true: die gemessene Outrodauer steckt in der geplanten Dauer. */
+  included: boolean;
+  /** Ein Satz fuer Bericht und Befund. */
+  text: string;
+}
+
+/** Was der Aufrufer weiss und die Messung allein nicht hergibt. */
+export interface ReviewOptions {
+  /** Untertitel waren fuer diesen Lauf erwartet (--captions). */
+  captionsExpected?: boolean;
+  /** Wie das Outro in die geplante Dauer einging; null ohne Outro. */
+  outro?: OutroNote | null;
+}
+
+/** Die geplante Dauer eines Renders samt Hinweis zum Outro. */
+export interface PlannedDuration {
+  seconds: number;
+  outro: OutroNote | null;
+}
+
+/**
+ * Der Teil des Renderplans, der in die geplante Dauer eingeht; bewusst
+ * schmal, damit Tests ihn ohne den ganzen Plan bauen koennen.
+ */
+export interface PlannedDurationPlan {
+  video: Array<{ duration: number }>;
+  outro: Outro | null;
+}
+
+/** Sekunden mit zwei Nachkommastellen, wie die uebrigen Messwerte. */
+function seconds(value: number): string {
+  return `${value.toFixed(2)} s`;
+}
+
+/**
+ * Die geplante Dauer eines Renders: die Summe der Blockdauern plus die
+ * gemessene Outrodauer minus die Ueberblendung, dieselbe Rechnung wie beim
+ * Anhaengen des Outros in `src/steps/render.ts`. Ist das Outro konfiguriert,
+ * aber fehlt die Datei oder ist sie nicht messbar, bleibt es draussen und
+ * der Hinweis sagt das.
+ */
+export async function plannedDurationOf(
+  plan: PlannedDurationPlan,
+  projectDir: string,
+  run?: RunFn,
+): Promise<PlannedDuration> {
+  const blockSeconds = plan.video.reduce((sum, segment) => sum + segment.duration, 0);
+  const outro = plan.outro;
+  if (outro === null) return { seconds: blockSeconds, outro: null };
+
+  const crossfade = outro.crossfade ?? DEFAULT_CROSSFADE;
+  try {
+    const duration = await probeDuration(resolve(projectDir, outro.file), run);
+    return {
+      seconds: blockSeconds + Math.max(0, duration - crossfade),
+      outro: {
+        included: true,
+        text:
+          `Outro eingerechnet: ${seconds(duration)} minus ` +
+          `${seconds(crossfade)} Ueberblendung.`,
+      },
+    };
+  } catch {
+    return {
+      seconds: blockSeconds,
+      outro: {
+        included: false,
+        text:
+          `Outro nicht eingerechnet: ${outro.file} fehlt oder ist ` +
+          "nicht messbar.",
+      },
+    };
+  }
+}
 
 /** Bildmessung: schwarze Fenster ab 0,5 s, Standbilder ab 2 s. */
 const PICTURE_FILTER = "blackdetect=d=0.5:pix_th=0.10,freezedetect=n=-60dB:d=2";
@@ -108,14 +191,13 @@ export function latestOutput(files: Array<{ name: string; mtimeMs: number }>): s
 
 /**
  * Misst eine Ausgabe: Format und Dauer per ffprobe, schwarze und stehende
- * Fenster per ffmpeg, die integrierte Lautheit per ebur128. `captionsExpected`
- * sagt, ob Untertitel zum Soll gehoeren; nur dann wird `captions.ass` neben
- * der Ausgabe geprueft. Ohne Erwartung bleibt nichts zu bemaengeln und
- * `captionsPresent` gilt als erfuellt.
+ * Fenster per ffmpeg, die integrierte Lautheit per ebur128, dazu die
+ * Anwesenheit von `captions.ass` neben der Ausgabe. Untertitel werden immer
+ * gemessen; ob fehlende ein Befund sind, entscheidet `findingsFor` ueber
+ * `captionsExpected`.
  */
 export async function analyzeOutput(
   output: string,
-  opts: { captionsExpected: boolean },
   run: RunFn = spawnRun,
 ): Promise<ReviewMeasurements> {
   const probed = await probe(output, run);
@@ -129,9 +211,7 @@ export async function analyzeOutput(
     "-af", "ebur128",
     "-f", "null", "-",
   ], run);
-  const captionsPresent = opts.captionsExpected === true
-    ? await fileExists(join(dirname(output), "captions.ass"))
-    : true;
+  const captionsPresent = await fileExists(join(dirname(output), "captions.ass"));
 
   return {
     duration: probed.duration,
@@ -146,27 +226,29 @@ export async function analyzeOutput(
   };
 }
 
-/** Sekunden mit zwei Nachkommastellen, wie die uebrigen Messwerte. */
-function seconds(value: number): string {
-  return `${value.toFixed(2)} s`;
-}
-
 /**
  * Die Befunde zu einer Messung: Dauerabweichung ueber 0,5 s, Lautheit
- * ausserhalb 1 LU, jedes Schwarzfenster und fehlende Untertitel. Eine nicht
- * messbare Lautheit ist kein Befund; der Bericht weist sie als solche aus.
+ * ausserhalb 1 LU, jedes Schwarzfenster und fehlende Untertitel, letztere
+ * nur wenn sie ausdruecklich erwartet waren (--captions). Ist ein
+ * konfiguriertes Outro nicht in die geplante Dauer eingegangen, sagt der
+ * Dauerbefund das. Eine nicht messbare Lautheit ist kein Befund; der Bericht
+ * weist sie als solche aus.
  */
 export function findingsFor(
   m: ReviewMeasurements,
   plannedDuration: number,
   masterLufs: number,
+  opts: ReviewOptions = {},
 ): string[] {
   const findings: string[] = [];
+  const outro = opts.outro ?? null;
   const deviation = m.duration - plannedDuration;
   if (Math.abs(deviation) > DURATION_TOLERANCE) {
+    const excluded = outro !== null && !outro.included ? ` ${outro.text}` : "";
     findings.push(
       `Dauer weicht ab: ${seconds(m.duration)} gemessen, ${seconds(plannedDuration)} geplant ` +
-      `(Abweichung ${seconds(Math.abs(deviation))}, Toleranz ${seconds(DURATION_TOLERANCE)}).`,
+      `(Abweichung ${seconds(Math.abs(deviation))}, Toleranz ${seconds(DURATION_TOLERANCE)}).` +
+      excluded,
     );
   }
   if (m.integratedLufs !== null &&
@@ -181,7 +263,7 @@ export function findingsFor(
       `Schwarzfenster: ${seconds(start)} bis ${seconds(end)} (${seconds(end - start)}).`,
     );
   }
-  if (!m.captionsPresent) {
+  if (opts.captionsExpected === true && !m.captionsPresent) {
     findings.push("Untertitel fehlen: captions.ass liegt nicht neben der Ausgabe.");
   }
   return findings;
@@ -198,7 +280,10 @@ function rangeList(ranges: Array<[number, number]>): string {
 /**
  * Das Messprotokoll als Markdown: Messwerte, Toleranzen, Befunde und Datum.
  * Deutsch, wie die uebrigen Berichte des Projekts; die Werte stammen alle aus
- * einer Messung, nichts ist geschaetzt.
+ * einer Messung, nichts ist geschaetzt. Die Untertitel stehen immer als
+ * Messung im Bericht; erwartet sind sie nur mit `captionsExpected`. Ein
+ * konfiguriertes Outro wird als eingerechnet oder nicht eingerechnet
+ * ausgewiesen.
  */
 export function renderReviewMarkdown(
   m: ReviewMeasurements,
@@ -206,10 +291,22 @@ export function renderReviewMarkdown(
   masterLufs: number,
   findings: string[],
   date: string,
+  opts: ReviewOptions = {},
 ): string {
+  const outro = opts.outro ?? null;
   const loudness = m.integratedLufs === null
     ? "nicht messbar"
     : `${m.integratedLufs.toFixed(1)} LUFS`;
+  const captions = m.captionsPresent
+    ? "vorhanden (captions.ass)"
+    : "fehlen (captions.ass)";
+  const captionsExpected = opts.captionsExpected === true ? "erwartet" : "nicht erwartet";
+  const durationSource = outro === null
+    ? "gegen die Summe der Blockdauern aus dem Renderplan"
+    : outro.included
+      ? "gegen die Summe der Blockdauern plus Outro minus Ueberblendung aus dem Renderplan"
+      : "gegen die Summe der Blockdauern aus dem Renderplan; " +
+        "das konfigurierte Outro ist nicht eingerechnet";
   return [
     "# Review: Messnachschau",
     "",
@@ -219,12 +316,13 @@ export function renderReviewMarkdown(
     "",
     `- Dauer: ${seconds(m.duration)} (geplant ${seconds(plannedDuration)}, ` +
     `Toleranz ${seconds(DURATION_TOLERANCE)})`,
+    ...(outro === null ? [] : [`- ${outro.text}`]),
     `- Format: ${m.width}x${m.height}, ${m.fps} fps`,
     `- Tonspur: ${m.hasAudio ? "vorhanden" : "fehlt"}`,
     `- Lautheit: ${loudness} (Soll ${masterLufs} LUFS, Toleranz ${LOUDNESS_TOLERANCE} LU)`,
     `- Schwarzfenster: ${rangeList(m.blackRanges)}`,
     `- Standbildfenster: ${rangeList(m.freezeRanges)}`,
-    `- Untertitel: ${m.captionsPresent ? "vorhanden (captions.ass)" : "fehlen (captions.ass)"}`,
+    `- Untertitel: ${captions}, ${captionsExpected}`,
     "",
     "## Befunde",
     "",
@@ -232,7 +330,7 @@ export function renderReviewMarkdown(
     "",
     "## Toleranzen",
     "",
-    `- Dauer: ${seconds(DURATION_TOLERANCE)} gegen die Summe der Blockdauern aus dem Renderplan`,
+    `- Dauer: ${seconds(DURATION_TOLERANCE)} ${durationSource}`,
     `- Lautheit: ${LOUDNESS_TOLERANCE} LU um ${masterLufs} LUFS`,
     "- Schwarzfenster: gemeldet ab 0.5 s Dauer (blackdetect, pix_th 0.10)",
     "- Standbildfenster: gemeldet ab 2 s Dauer (freezedetect, -60 dB)",

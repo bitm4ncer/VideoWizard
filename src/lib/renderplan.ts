@@ -3,6 +3,12 @@ import { blockStatus } from "./plan.js";
 import type { BlockKind, Format, Music, Outro, Project } from "./types.js";
 import type { TranscriptWord } from "./providers/transcript.js";
 
+/**
+ * Ueberblendung zum Outro in Sekunden, wenn das Projekt keine nennt; der
+ * Render und die Nachschau rechnen mit demselben Wert.
+ */
+export const DEFAULT_CROSSFADE = 0.5;
+
 /** Ein Bildabschnitt des Render-Plans: was geschnitten und gehalten wird. */
 export interface VideoSegment {
   blockId: string;
