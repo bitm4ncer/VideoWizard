@@ -10,6 +10,7 @@ const repoRoot = fileURLToPath(new URL("..", import.meta.url));
 /** Die Skills, die die Etappen verlangen. Geprueft wird der echte Repo-Bestand. */
 const verlangteSkills = [
   "skills/meta/using-videowizard/SKILL.md",
+  "skills/meta/harvesting-learnings/SKILL.md",
   "skills/planning/planning-short/SKILL.md",
   "skills/producing/making-a-short/SKILL.md",
   "skills/tools/tool-ffmpeg/SKILL.md",

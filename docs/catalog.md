@@ -7,6 +7,7 @@ Bausteinen in `blocks/index.json`. Diese Datei wird nicht von Hand gepflegt.
 
 ### meta
 
+- **harvesting-learnings**: Use when a measured observation should become an entry in learnings/, when an existing entry needs its target and consequence decided, or when an incorporated entry must be marked.
 - **using-videowizard**: Use when starting VideoWizard work, when a video task arrives, or when it is unclear which planning or production skill applies.
 
 ### planning
