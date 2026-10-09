@@ -385,6 +385,16 @@ describe("toVoiceboxOptions", () => {
       profile_name: PROFILE,
     });
   });
+
+  it("trimmt uebernommene Werte", () => {
+    expect(toVoiceboxOptions({
+      base_url: `  ${BASE}  `,
+      profile_name: ` ${PROFILE} `,
+      engine: " qwen ",
+      model_size: " 1.7B ",
+      language: " en ",
+    })).toEqual(options);
+  });
 });
 
 describe("resolveVoiceProvider: die Wahl", () => {

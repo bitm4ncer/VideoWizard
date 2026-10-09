@@ -40,15 +40,16 @@ export interface VoiceboxOptions {
 }
 
 /**
- * Liest die bekannten Optionen; ein falscher Typ zaehlt als nicht gesetzt.
- * base_url ist Pflicht: ohne sie gibt es eine klare Meldung statt einer
- * Anfrage ins Leere. profile_name ist optional, weil `detect()` nur die
- * Adresse braucht; `speak` verlangt den Namen beim Aufruf.
+ * Liest die bekannten Optionen; ein falscher Typ zaehlt als nicht gesetzt,
+ * uebernommene Werte werden getrimmt. base_url ist Pflicht: ohne sie gibt es
+ * eine klare Meldung statt einer Anfrage ins Leere. profile_name ist optional,
+ * weil `detect()` nur die Adresse braucht; `speak` verlangt den Namen beim
+ * Aufruf.
  */
 export function toVoiceboxOptions(options: Record<string, unknown> = {}): VoiceboxOptions {
   const readString = (key: string): string | undefined => {
     const value = options[key];
-    return typeof value === "string" && value.trim() !== "" ? value : undefined;
+    return typeof value === "string" && value.trim() !== "" ? value.trim() : undefined;
   };
   const base_url = readString("base_url");
   const profile_name = readString("profile_name");

@@ -4,11 +4,14 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { runIngest } from "../src/commands/ingest.js";
 import { runRender } from "../src/commands/render.js";
+import { runSegment } from "../src/commands/segment.js";
+import { runStatus } from "../src/commands/status.js";
 import { runVoice } from "../src/commands/voice.js";
 import { probeDuration } from "../src/lib/ffmpeg.js";
 import { ttsHash } from "../src/lib/hash.js";
 import { CURRENT_SCHEMA, loadProject, saveProject } from "../src/lib/project.js";
 import type { RunFn } from "../src/lib/ffmpeg.js";
+import type { TranscriptWord } from "../src/lib/providers/transcript.js";
 import type { VoiceProvider } from "../src/lib/providers/voice.js";
 import type { Block, Project } from "../src/lib/types.js";
 
@@ -56,6 +59,15 @@ function block(over: Partial<Block> = {}): Block {
     overlays: [],
     ...over,
   };
+}
+
+/** Woerter der Laenge eine Sekunde von `from` bis `to`; fuer die Segmentierung. */
+function words(from: number, to: number): TranscriptWord[] {
+  const result: TranscriptWord[] = [];
+  for (let time = from; time < to; time += 1) {
+    result.push({ start: time, end: Math.min(time + 1, to), text: `w${time}` });
+  }
+  return result;
 }
 
 /** Ein Projekt mit einer Quelle und den uebergebenen Bloecken. */
@@ -488,5 +500,149 @@ describe("runIngest", () => {
     expect(project.sources[0]?.label).toBe("Kamera A");
     // Die Dauer stammt von der abgelegten Datei, nicht von der Quelle davor.
     expect(project.sources[0]?.duration).toBe(7.4);
+  });
+});
+
+describe("runSegment", () => {
+  it("haengt Bloecke hinten an und vergibt Kennungen nach der hoechsten vorhandenen", async () => {
+    const dir = await tempProject(beispiel([block({ id: "b004", text: "Alt" })]));
+    await mkdir(join(dir, "sources", "s01"), { recursive: true });
+    await writeFile(
+      join(dir, "sources", "s01", "words.json"),
+      JSON.stringify(words(0, 30)),
+      "utf8",
+    );
+    await writeFile(
+      join(dir, "sources", "s01", "silences.json"),
+      JSON.stringify([[9, 11]]),
+      "utf8",
+    );
+
+    const code = await runSegment([dir, "s01"]);
+
+    expect(code).toBe(0);
+    expect(text(out)).toContain("2 Bloecke");
+    expect(err).toEqual([]);
+    const project = await loadProject(dir);
+    expect(project.blocks.map((entry) => entry.id)).toEqual(["b004", "b005", "b006"]);
+    const fresh = project.blocks.slice(1);
+    expect(fresh[0]?.source_id).toBe("s01");
+    expect(fresh[0]?.source_in).toBe(0);
+    expect(fresh[0]?.source_out).toBe(10);
+    expect(fresh[1]?.source_in).toBe(10);
+    expect(fresh[1]?.source_out).toBe(30);
+  });
+
+  it("wirft ohne words.json mit dem Pfad", async () => {
+    const dir = await tempProject(beispiel());
+    await mkdir(join(dir, "sources", "s01"), { recursive: true });
+
+    const code = await runSegment([dir, "s01"]);
+
+    expect(code).toBe(1);
+    expect(text(err)).toContain(join(dir, "sources", "s01", "words.json"));
+    // Nichts gespeichert: die Bloecke bleiben leer.
+    expect((await loadProject(dir)).blocks).toEqual([]);
+  });
+
+  it("arbeitet ohne silences.json mit leerer Liste und einer Warnung", async () => {
+    const dir = await tempProject(beispiel());
+    await mkdir(join(dir, "sources", "s01"), { recursive: true });
+    await writeFile(
+      join(dir, "sources", "s01", "words.json"),
+      JSON.stringify(words(0, 30)),
+      "utf8",
+    );
+
+    const code = await runSegment([dir, "s01"]);
+
+    expect(code).toBe(0);
+    expect(text(warning)).toContain(join(dir, "sources", "s01", "silences.json"));
+    const project = await loadProject(dir);
+    // Ohne Pausen wird hart bei 25 s geschnitten: zwei Bloecke.
+    expect(project.blocks).toHaveLength(2);
+    expect(project.blocks[0]?.silences).toEqual([]);
+  });
+
+  it("wirft bei unbekannter Quelle mit der Kennung", async () => {
+    const dir = await tempProject(beispiel());
+
+    const code = await runSegment([dir, "s99"]);
+
+    expect(code).toBe(1);
+    expect(text(err)).toContain("s99");
+  });
+
+  it("nennt ohne Argumente die Nutzung und endet mit 2", async () => {
+    const code = await runSegment([]);
+    expect(code).toBe(2);
+    expect(text(err)).toMatch(/Aufruf/);
+    expect(text(err)).toContain("segment <ordner> <quelle>");
+    expect(out).toEqual([]);
+  });
+
+  it("weist unbekannte Schalter als Bedienfehler ab", async () => {
+    const code = await runSegment([".", "s01", "--schnell"]);
+    expect(code).toBe(2);
+    expect(text(err)).toMatch(/Aufruf/);
+  });
+});
+
+describe("runStatus", () => {
+  it('meldet stale bei nicht passendem Hash und ok bei passendem', async () => {
+    const dir = await tempProject(beispiel([
+      block({
+        id: "b001",
+        text: "Geaenderter Text",
+        tts: {
+          file: "audio/tts/b001.wav",
+          duration: 2,
+          hash: ttsHash("Alter Text", "voicebox"),
+          generated_at: "2026-10-01T00:00:00.000Z",
+        },
+      }),
+      block({
+        id: "b002",
+        text: " Passt. ",
+        tts: {
+          file: "audio/tts/b002.wav",
+          duration: 2,
+          hash: ttsHash("Passt.", "voicebox"),
+          generated_at: "2026-10-01T00:00:00.000Z",
+        },
+      }),
+      block({ id: "b003", text: "Noch offen" }),
+    ]));
+
+    const code = await runStatus([dir]);
+
+    expect(code).toBe(0);
+    const lines = out.map((line) => line.trim());
+    expect(lines.some((line) => line.startsWith("b001") && line.includes("stale"))).toBe(true);
+    expect(lines.some((line) => line.startsWith("b002") && line.includes("ok"))).toBe(true);
+    expect(lines.some((line) => line.startsWith("b003") && line.includes("todo"))).toBe(true);
+    expect(text(out)).toContain("offene Bloecke: 2 von 3");
+    expect(err).toEqual([]);
+  });
+
+  it("bleibt ohne aufloesbare Stimmen-Faehigkeit beim bisherigen Urteil", async () => {
+    const dir = await tempProject(beispiel([
+      block({
+        id: "b001",
+        text: "Text",
+        tts: {
+          file: "audio/tts/b001.wav",
+          duration: 2,
+          hash: "veraltet",
+          generated_at: "2026-10-01T00:00:00.000Z",
+        },
+      }),
+    ], { capabilities: {} }));
+
+    const code = await runStatus([dir]);
+
+    expect(code).toBe(0);
+    expect(text(out)).not.toContain("stale");
+    expect(text(out)).toContain("offene Bloecke: 0 von 1");
   });
 });

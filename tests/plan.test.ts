@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
+import { ttsHash } from "../src/lib/hash.js";
 import { CURRENT_SCHEMA } from "../src/lib/project.js";
-import { addBlock, blockById, blockStatus, moveBlock, removeBlock } from "../src/lib/plan.js";
-import type { Block, Project } from "../src/lib/types.js";
+import { addBlock, blockById, blockStatus, moveBlock, removeBlock, sourceById } from "../src/lib/plan.js";
+import type { Block, Project, Source } from "../src/lib/types.js";
 
 /** Ein Block mit allen Pflichtfeldern; Abweichungen kommen ueber over. */
 function block(over: Partial<Block> = {}): Block {
@@ -40,7 +41,7 @@ function ids(project: Project): string[] {
 }
 
 /** Eine fertige Vertonung, wie sie `vz voice` spaeter schreibt. */
-function tts(): Block["tts"] {
+function tts(): NonNullable<Block["tts"]> {
   return {
     file: "audio/tts/b001.wav",
     duration: 1.2,
@@ -57,6 +58,12 @@ describe("addBlock", () => {
     expect(ids(project)).toEqual(["b001", "b002"]);
     // Der Block selbst wird eingesetzt, keine Kopie.
     expect(project.blocks[1]).toBe(zweiter);
+  });
+
+  it("wirft bei doppelter Kennung mit dem Namen und laesst die Liste unberuehrt", () => {
+    const project = projekt([block({ id: "b001" })]);
+    expect(() => addBlock(project, block({ id: "b001" }))).toThrow(/b001/);
+    expect(ids(project)).toEqual(["b001"]);
   });
 });
 
@@ -117,6 +124,32 @@ describe("blockById", () => {
   });
 });
 
+describe("sourceById", () => {
+  /** Eine Quelle mit allen Pflichtfeldern. */
+  function source(over: Partial<Source> = {}): Source {
+    return {
+      id: "s01",
+      label: "Kamera A",
+      file: "sources/s01/raw.mp4",
+      added: "2026-10-08",
+      duration: 10,
+      checksum: "c".repeat(32),
+      normalized: false,
+      ...over,
+    };
+  }
+
+  it("liefert genau die Quelle mit der Kennung", () => {
+    const project = projekt();
+    project.sources = [source(), source({ id: "s02" })];
+    expect(sourceById(project, "s02")).toBe(project.sources[1]);
+  });
+
+  it("wirft bei unbekannter Kennung mit dem Namen", () => {
+    expect(() => sourceById(projekt(), "s99")).toThrow(/s99/);
+  });
+});
+
 describe("blockStatus", () => {
   it('ist "ok", sobald Text und Ton vorhanden sind', () => {
     expect(blockStatus(block({ text: "Ein Satz.", tts: tts() }))).toBe("ok");
@@ -128,5 +161,31 @@ describe("blockStatus", () => {
 
   it('ist "todo" ohne Ton', () => {
     expect(blockStatus(block({ text: "Ein Satz." }))).toBe("todo");
+  });
+
+  it('ist "stale", wenn der Hash nicht zum getrimmten Text passt', () => {
+    const entry = block({
+      text: " Neuer Text ",
+      tts: { ...tts(), hash: ttsHash("Alter Text", "voicebox") },
+    });
+    expect(blockStatus(entry, "voicebox")).toBe("stale");
+  });
+
+  it('ist "ok", wenn der Hash zum getrimmten Text passt', () => {
+    const entry = block({
+      text: " Ein Satz. ",
+      tts: { ...tts(), hash: ttsHash("Ein Satz.", "voicebox") },
+    });
+    expect(blockStatus(entry, "voicebox")).toBe("ok");
+  });
+
+  it("bleibt ohne Stimmen-Kennung beim bisherigen Urteil", () => {
+    const entry = block({ text: "Neuer Text", tts: { ...tts(), hash: "veraltet" } });
+    expect(blockStatus(entry)).toBe("ok");
+  });
+
+  it('ist "todo" ohne Ton oder ohne Text, auch mit Stimmen-Kennung', () => {
+    expect(blockStatus(block({ text: "Ein Satz." }), "voicebox")).toBe("todo");
+    expect(blockStatus(block({ tts: tts() }), "voicebox")).toBe("todo");
   });
 });

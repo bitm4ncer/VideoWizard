@@ -1,4 +1,5 @@
-import type { Block, Project } from "./types.js";
+import { ttsHash } from "./hash.js";
+import type { Block, Project, Source } from "./types.js";
 
 /**
  * Die Planoperationen auf `project.json`. Reine Operationen auf dem
@@ -17,6 +18,12 @@ function indexOfBlock(project: Project, id: string): number {
 
 /** Haengt einen Block hinten an; die Reihenfolge im Array ist die im Video. */
 export function addBlock(project: Project, block: Block): void {
+  if (project.blocks.some((existing) => existing.id === block.id)) {
+    throw new Error(
+      `Doppelte Blockkennung: ${block.id}. ` +
+      `Zwei Bloecke mit derselben Kennung teilen sich audio/tts/${block.id}.wav.`,
+    );
+  }
   project.blocks.push(block);
 }
 
@@ -49,11 +56,29 @@ export function blockById(project: Project, id: string): Block {
   return block;
 }
 
+/** Liefert die Quelle mit dieser Kennung; eine unbekannte wirft mit dem Namen. */
+export function sourceById(project: Project, id: string): Source {
+  const source = project.sources.find((candidate) => candidate.id === id);
+  if (source === undefined) {
+    throw new Error(`Quelle unbekannt: ${id}`);
+  }
+  return source;
+}
+
 /**
- * Der kleine Zustand eines Blocks: "todo", solange Text oder Ton fehlen,
- * sonst "ok". Mehr Zustaende kommen, wenn Vertonung und Sync sie brauchen.
- * Wird bei jedem Laden neu berechnet, nie gespeichert.
+ * Der kleine Zustand eines Blocks: "todo", solange Text oder Ton fehlen.
+ * Mit einer Stimmen-Kennung gilt der Ton zusaetzlich als "stale", wenn der
+ * gespeicherte Hash nicht zum getrimmten Text passt; ohne Kennung bleibt es
+ * beim bisherigen Urteil "ok". Wird bei jedem Laden neu berechnet, nie
+ * gespeichert.
  */
-export function blockStatus(block: Block): "todo" | "ok" {
-  return block.text === undefined || block.tts === undefined ? "todo" : "ok";
+export function blockStatus(block: Block, voiceProviderId?: string): "todo" | "stale" | "ok" {
+  if (block.text === undefined || block.tts === undefined) return "todo";
+  if (
+    voiceProviderId !== undefined &&
+    block.tts.hash !== ttsHash(block.text.trim(), voiceProviderId)
+  ) {
+    return "stale";
+  }
+  return "ok";
 }
