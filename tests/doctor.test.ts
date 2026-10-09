@@ -2,11 +2,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { runCli } from "../src/cli.js";
 import { capabilities, detect, renderReport } from "../src/lib/capabilities.js";
 import { acestepProvider } from "../src/lib/providers/acestep.js";
+import { elevenlabsMusicProvider } from "../src/lib/providers/elevenlabs_music.js";
+import { elevenlabsVoiceProvider } from "../src/lib/providers/elevenlabs.js";
 import type {
   Capability,
   CapabilityState,
+  ProviderFactories,
+  ProviderFactory,
   Run,
-  ServiceFactories,
 } from "../src/lib/capabilities.js";
 import type { FetchLike } from "../src/lib/providers/music.js";
 
@@ -16,15 +19,15 @@ const failing: Run = async () => {
 };
 
 describe("capabilities: die Registry", () => {
-  it("fuehrt render (ffmpeg), music (acestep), voice (voicebox) und transcript (whisper)", () => {
+  it("fuehrt fuer music und voice je zwei Anbieter, dazu render und transcript", () => {
     const list = capabilities();
     const render = list.find((capability) => capability.id === "render");
     const music = list.find((capability) => capability.id === "music");
     const voice = list.find((capability) => capability.id === "voice");
     const transcript = list.find((capability) => capability.id === "transcript");
     expect(render?.providers.map((provider) => provider.id)).toEqual(["ffmpeg"]);
-    expect(music?.providers.map((provider) => provider.id)).toEqual(["acestep"]);
-    expect(voice?.providers.map((provider) => provider.id)).toEqual(["voicebox"]);
+    expect(music?.providers.map((provider) => provider.id)).toEqual(["acestep", "elevenlabs"]);
+    expect(voice?.providers.map((provider) => provider.id)).toEqual(["voicebox", "elevenlabs"]);
     expect(transcript?.providers.map((provider) => provider.id)).toEqual(["whisper"]);
     expect(render?.label).toBeTruthy();
     expect(music?.label).toBeTruthy();
@@ -32,7 +35,7 @@ describe("capabilities: die Registry", () => {
     expect(transcript?.label).toBeTruthy();
   });
 
-  it("traegt je Anbieter die Art Programm oder Dienst", () => {
+  it("traegt je Anbieter die Art Programm, Dienst oder Schluessel", () => {
     const providers = capabilities().flatMap((capability) => capability.providers);
     const kinds = Object.fromEntries(providers.map((provider) => [provider.id, provider.kind]));
     expect(kinds).toEqual({
@@ -40,7 +43,13 @@ describe("capabilities: die Registry", () => {
       acestep: "service",
       voicebox: "service",
       whisper: "program",
+      elevenlabs: "key",
     });
+    const keyProviders = providers.filter((provider) => provider.kind === "key");
+    expect(keyProviders.map((provider) => provider.id)).toEqual(["elevenlabs", "elevenlabs"]);
+    for (const provider of keyProviders) {
+      expect(provider.install).toBe("key");
+    }
   });
 
   it("fuehrt die Transkript-Faehigkeit genau einmal, mit whisper als Programm", () => {
@@ -102,7 +111,7 @@ describe("detect: die Zustaende", () => {
     const report = await detect(failing);
     const transcript = report.find((entry) => entry.capability.id === "transcript");
     expect(transcript?.state).toBe("auto-installable");
-    expect(transcript?.provider).toBeUndefined();
+    expect(transcript?.provider).toBe("whisper");
     expect(renderReport(report)).toContain("Transkript: automatisch installierbar (whisper)");
   });
 
@@ -124,7 +133,7 @@ describe("detect: die Zustaende", () => {
       calls.push(url);
       return new Response("ok", { status: 200 });
     };
-    const services: ServiceFactories = { acestep: () => acestepProvider({}, { fetch }) };
+    const services: ProviderFactories = { acestep: () => acestepProvider({}, { fetch }) };
 
     const report = await detect(failing, capabilities(), services);
     const music = report.find((entry) => entry.capability.id === "music");
@@ -139,13 +148,13 @@ describe("detect: die Zustaende", () => {
     const fetch: FetchLike = async () => {
       throw new Error("kein Dienst");
     };
-    const services: ServiceFactories = { acestep: () => acestepProvider({}, { fetch }) };
+    const services: ProviderFactories = { acestep: () => acestepProvider({}, { fetch }) };
 
     const report = await detect(failing, capabilities(), services);
     const music = report.find((entry) => entry.capability.id === "music");
 
     expect(music?.state).toBe("manual");
-    expect(music?.provider).toBeUndefined();
+    expect(music?.provider).toBe("acestep");
     expect(renderReport(report)).toContain("Musik: nur von Hand (acestep)");
   });
 
@@ -158,7 +167,7 @@ describe("detect: die Zustaende", () => {
   });
 
   it("wirft nicht, wenn die Dienst-Erkennung selbst scheitert", async () => {
-    const services: ServiceFactories = {
+    const services: ProviderFactories = {
       acestep: () => ({
         detect: async () => {
           throw new Error("kaputt");
@@ -182,11 +191,12 @@ describe("detect: die Zustaende", () => {
       id: "voice",
       label: "Stimme",
       providers: [
-        { id: "elevenlabs", kind: "program", detect: ["elevenlabs", "ping"], install: "key" },
+        { id: "elevenlabs", kind: "key", install: "key" },
       ],
     };
     const report = await detect(failing, [mitSchluessel]);
     expect(report[0]?.state).toBe("key-required");
+    expect(report[0]?.provider).toBe("elevenlabs");
     expect(renderReport(report)).toBe("Stimme: Schluessel noetig (elevenlabs)");
   });
 
@@ -195,6 +205,106 @@ describe("detect: die Zustaende", () => {
       throw new Error("kaputt");
     };
     await expect(detect(run)).resolves.toHaveLength(capabilities().length);
+  });
+});
+
+describe("detect: mehrere Anbieter je Faehigkeit", () => {
+  it("fuehrt voice mit zwei Anbietern und liefert trotzdem genau eine Zeile", async () => {
+    const voice = capabilities().find((capability) => capability.id === "voice");
+    expect(voice?.providers.map((provider) => provider.id)).toEqual(["voicebox", "elevenlabs"]);
+
+    const report = await detect(failing);
+    const lines = renderReport(report)
+      .split("\n")
+      .filter((line) => line.startsWith("Stimme:"));
+    expect(lines).toHaveLength(1);
+  });
+
+  it("meldet voicebox als vorhanden, wenn der Dienst erreichbar ist", async () => {
+    const services: ProviderFactories = {
+      voicebox: () => ({ detect: async () => true }),
+    };
+
+    const report = await detect(failing, capabilities(), services);
+    const voice = report.find((entry) => entry.capability.id === "voice");
+
+    expect(voice?.state).toBe("present");
+    expect(voice?.provider).toBe("voicebox");
+    expect(renderReport(report)).toContain("Stimme: vorhanden (Dienst: voicebox)");
+  });
+
+  it("meldet den Schluessel-Anbieter als vorhanden, wenn voicebox tot ist und der Schluessel gesetzt ist", async () => {
+    const services: ProviderFactories = {
+      voicebox: () => ({ detect: async () => false }),
+      elevenlabs: () =>
+        elevenlabsVoiceProvider(
+          { voice_id: "pruefung" },
+          { env: { ELEVENLABS_API_KEY: "test-schluessel" } },
+        ),
+    };
+
+    const report = await detect(failing, capabilities(), services);
+    const voice = report.find((entry) => entry.capability.id === "voice");
+
+    expect(voice?.state).toBe("present");
+    expect(voice?.provider).toBe("elevenlabs");
+    expect(renderReport(report)).toContain("Stimme: vorhanden (Schluessel: elevenlabs)");
+    expect(renderReport(report)).not.toContain("Stimme: Schluessel noetig");
+  });
+
+  it("meldet voicebox als nur von Hand, wenn beide tot sind und kein Schluessel gesetzt ist", async () => {
+    const services: ProviderFactories = {
+      voicebox: () => ({ detect: async () => false }),
+      elevenlabs: () => ({ detect: async () => false }),
+    };
+
+    const report = await detect(failing, capabilities(), services);
+    const voice = report.find((entry) => entry.capability.id === "voice");
+
+    expect(voice?.state).toBe("manual");
+    expect(voice?.provider).toBe("voicebox");
+    expect(renderReport(report)).toContain("Stimme: nur von Hand (voicebox)");
+  });
+
+  it("bewertet music analog mit acestep und elevenlabs", async () => {
+    const music = capabilities().find((capability) => capability.id === "music");
+    expect(music?.providers.map((provider) => provider.id)).toEqual(["acestep", "elevenlabs"]);
+
+    const services: ProviderFactories = {
+      acestep: () => ({ detect: async () => false }),
+      elevenlabs: () =>
+        elevenlabsMusicProvider({}, { env: { ELEVENLABS_API_KEY: "test-schluessel" } }),
+    };
+
+    const report = await detect(failing, capabilities(), services);
+    const entry = report.find((row) => row.capability.id === "music");
+
+    expect(entry?.state).toBe("present");
+    expect(entry?.provider).toBe("elevenlabs");
+    expect(renderReport(report)).toContain("Musik: vorhanden (Schluessel: elevenlabs)");
+  });
+
+  it("aendert an der Zeilenzahl nichts, wenn ein Detect wirft", async () => {
+    const kaputt: ProviderFactory = () => ({
+      detect: async () => {
+        throw new Error("kaputt");
+      },
+    });
+    const still: ProviderFactory = () => ({ detect: async () => false });
+
+    const broken = await detect(failing, capabilities(), {
+      acestep: kaputt,
+      voicebox: kaputt,
+      elevenlabs: kaputt,
+    });
+    const intact = await detect(failing, capabilities(), {
+      acestep: still,
+      voicebox: still,
+      elevenlabs: still,
+    });
+
+    expect(renderReport(broken).split("\n")).toHaveLength(renderReport(intact).split("\n").length);
+    expect(renderReport(broken).split("\n")).toHaveLength(capabilities().length);
   });
 });
 
@@ -242,6 +352,7 @@ beforeEach(() => {
 afterEach(() => {
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
+  vi.unstubAllEnvs();
 });
 
 describe("runCli: doctor", () => {
@@ -266,6 +377,18 @@ describe("runCli: doctor", () => {
     expect(code).toBe(0);
     expect(urls).toContain("http://127.0.0.1:8001/health");
     expect(urls).toContain("http://127.0.0.1:17493/health");
+  });
+
+  it("meldet den Schluessel aus der Umgebung, wenn kein Dienst antwortet", async () => {
+    vi.stubGlobal("fetch", async () => {
+      throw new Error("kein Dienst");
+    });
+    vi.stubEnv("ELEVENLABS_API_KEY", "test-schluessel");
+    const code = await runCli(["doctor"]);
+    expect(code).toBe(0);
+    expect(out.join("\n")).toContain("Stimme: vorhanden (Schluessel: elevenlabs)");
+    expect(out.join("\n")).toContain("Musik: vorhanden (Schluessel: elevenlabs)");
+    expect(err).toEqual([]);
   });
 
   it("endet bei zu vielen Argumenten mit 2 und einer Aufrufzeile", async () => {
