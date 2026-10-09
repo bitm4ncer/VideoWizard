@@ -4,9 +4,9 @@
  * Das Kommando kommt als Vorlage aus `capabilities.transcript.options.command`
  * und kennt genau zwei Platzhalter: `{input}` ist die Audiodatei, `{outdir}`
  * ein temporaerer Ordner, den dieser Anbieter anlegt und danach entfernt.
- * Whisper-Flags kennt der Code nicht; sie stehen im Rezept
- * (whisper-ctranslate2, Quelle docs/en/CLI.md bzw. dessen README) und in der
- * Konfiguration. Das Rezept ist nachgeschlagen, nicht gegengeprueft.
+ * Whisper-Flags kennt der Code nicht; sie stehen im Rezept (WHISPER_COMMAND,
+ * Quelle docs/en/CLI.md bzw. dessen README) und in der Konfiguration. Das
+ * Rezept ist nachgeschlagen, nicht gegengeprueft.
  *
  * Die Ergebnisdatei wird gesucht, nicht geraten: bevorzugt
  * `<outdir>/<basisname>.json`, sonst die einzige `.json` im Ordner; sonst
@@ -23,6 +23,12 @@ import type {
   TranscriptProvider,
   TranscriptWord,
 } from "./transcript.js";
+
+/**
+ * Das empfohlene Kommando des Rezepts. Der Doctor prueft genau dieses
+ * Kommando, damit Rezept und Doctor nicht auseinanderlaufen.
+ */
+export const WHISPER_COMMAND = "whisper-ctranslate2";
 
 /** Die Optionen des Whisper-Anbieters aus `capabilities.transcript.options`. */
 export interface WhisperOptions {

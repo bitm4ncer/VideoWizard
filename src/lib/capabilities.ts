@@ -7,6 +7,7 @@
  */
 
 import { execFile } from "node:child_process";
+import { WHISPER_COMMAND } from "./providers/whisper.js";
 
 /** Wie ein fehlender Anbieter beschafft wird. `key` braucht einen Schluessel. */
 export type InstallKind = "auto" | "manual" | "key";
@@ -76,9 +77,10 @@ export type ServiceFactory = () => DetectableService;
 export type ServiceFactories = Record<string, ServiceFactory>;
 
 /**
- * Die Registry, Stand Etappe 2a: `render` mit ffmpeg, `music` mit acestep und
- * `voice` mit voicebox. Weitere Faehigkeiten und Anbieter folgen mit ihren
- * Etappen.
+ * Die Registry, Stand Etappe 2b: `render` mit ffmpeg, `music` mit acestep,
+ * `voice` mit voicebox und `transcript` mit whisper. Das Whisper-Kommando
+ * kommt aus dem Rezept (`WHISPER_COMMAND`), damit beide nicht auseinander
+ * laufen. Weitere Faehigkeiten und Anbieter folgen mit ihren Etappen.
  */
 const registry: Capability[] = [
   {
@@ -112,6 +114,18 @@ const registry: Capability[] = [
         id: "voicebox",
         kind: "service",
         install: "manual",
+      },
+    ],
+  },
+  {
+    id: "transcript",
+    label: "Transkript",
+    providers: [
+      {
+        id: "whisper",
+        kind: "program",
+        detect: [WHISPER_COMMAND, "--help"],
+        install: "auto",
       },
     ],
   },

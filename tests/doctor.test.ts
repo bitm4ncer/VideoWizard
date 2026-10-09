@@ -16,17 +16,20 @@ const failing: Run = async () => {
 };
 
 describe("capabilities: die Registry", () => {
-  it("fuehrt render (ffmpeg), music (acestep) und voice (voicebox)", () => {
+  it("fuehrt render (ffmpeg), music (acestep), voice (voicebox) und transcript (whisper)", () => {
     const list = capabilities();
     const render = list.find((capability) => capability.id === "render");
     const music = list.find((capability) => capability.id === "music");
     const voice = list.find((capability) => capability.id === "voice");
+    const transcript = list.find((capability) => capability.id === "transcript");
     expect(render?.providers.map((provider) => provider.id)).toEqual(["ffmpeg"]);
     expect(music?.providers.map((provider) => provider.id)).toEqual(["acestep"]);
     expect(voice?.providers.map((provider) => provider.id)).toEqual(["voicebox"]);
+    expect(transcript?.providers.map((provider) => provider.id)).toEqual(["whisper"]);
     expect(render?.label).toBeTruthy();
     expect(music?.label).toBeTruthy();
     expect(voice?.label).toBeTruthy();
+    expect(transcript?.label).toBeTruthy();
   });
 
   it("traegt je Anbieter die Art Programm oder Dienst", () => {
@@ -36,6 +39,20 @@ describe("capabilities: die Registry", () => {
       ffmpeg: "program",
       acestep: "service",
       voicebox: "service",
+      whisper: "program",
+    });
+  });
+
+  it("fuehrt die Transkript-Faehigkeit genau einmal, mit whisper als Programm", () => {
+    const transcript = capabilities().filter((capability) => capability.id === "transcript");
+    expect(transcript).toHaveLength(1);
+    const [capability] = transcript;
+    expect(capability?.label).toBe("Transkript");
+    expect(capability?.providers).toHaveLength(1);
+    expect(capability?.providers[0]).toMatchObject({
+      id: "whisper",
+      kind: "program",
+      install: "auto",
     });
   });
 
@@ -65,6 +82,40 @@ describe("detect: die Zustaende", () => {
     const render = report.find((entry) => entry.capability.id === "render");
     expect(render?.state).toBe("auto-installable");
     expect(renderReport(report)).toContain("Schnitt/Mix/Render: automatisch installierbar (ffmpeg)");
+  });
+
+  it("meldet whisper als vorhanden, wenn der Erkennungsbefehl antwortet", async () => {
+    const calls: string[][] = [];
+    const run: Run = async (args) => {
+      calls.push(args);
+      return "";
+    };
+    const report = await detect(run);
+    const transcript = report.find((entry) => entry.capability.id === "transcript");
+    expect(transcript?.state).toBe("present");
+    expect(transcript?.provider).toBe("whisper");
+    expect(calls).toContainEqual(["whisper-ctranslate2", "--help"]);
+    expect(renderReport(report)).toContain("Transkript: vorhanden (Programm: whisper)");
+  });
+
+  it("meldet whisper als automatisch installierbar, wenn das Kommando fehlt", async () => {
+    const report = await detect(failing);
+    const transcript = report.find((entry) => entry.capability.id === "transcript");
+    expect(transcript?.state).toBe("auto-installable");
+    expect(transcript?.provider).toBeUndefined();
+    expect(renderReport(report)).toContain("Transkript: automatisch installierbar (whisper)");
+  });
+
+  it("zeigt die Transkript-Zeile genau einmal, auch wenn die Erkennung wirft", async () => {
+    const run: Run = async (args) => {
+      if (args[0] === "whisper-ctranslate2") throw new Error("kaputt");
+      return "";
+    };
+    const report = await detect(run);
+    const lines = renderReport(report)
+      .split("\n")
+      .filter((line) => line.startsWith("Transkript:"));
+    expect(lines).toEqual(["Transkript: automatisch installierbar (whisper)"]);
   });
 
   it("meldet einen Dienst mit erreichbarem /health als vorhanden (Dienst: acestep)", async () => {
@@ -201,6 +252,7 @@ describe("runCli: doctor", () => {
     expect(out.join("\n")).toContain("Schnitt/Mix/Render");
     expect(out.join("\n")).toContain("Musik: vorhanden (Dienst: acestep)");
     expect(out.join("\n")).toContain("Stimme: vorhanden (Dienst: voicebox)");
+    expect(out.join("\n")).toContain("Transkript:");
     expect(err).toEqual([]);
   });
 

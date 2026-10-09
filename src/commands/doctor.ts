@@ -9,6 +9,7 @@ const VOICEBOX_URL = "http://127.0.0.1:17493";
 /**
  * Der Doctor hat kein Projekt: die Dienste werden mit ihren Vorgaben gebaut,
  * ACE-Step auf http://127.0.0.1:8001, Voicebox auf http://127.0.0.1:17493.
+ * Programme wie ffmpeg und whisper prueft die Registry selbst.
  */
 function defaultServices(): ServiceFactories {
   return {
