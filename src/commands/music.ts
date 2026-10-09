@@ -158,7 +158,7 @@ async function generateMusic(
   args: { prompt: string; seconds?: number; yes: boolean },
   hooked?: MusicProvider,
 ): Promise<number> {
-  const provider = hooked ?? resolveMusicProvider(project);
+  const provider = hooked ?? resolveMusicProvider(project, { baseDir: projectPaths(dir).dir });
   const extension = AUDIO_EXTENSIONS[provider.id];
   if (extension === undefined) {
     throw new Error(

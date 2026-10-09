@@ -46,7 +46,8 @@ export async function runVoice(args: string[], deps: VoiceCommandDeps = {}): Pro
   }
   try {
     const project = await loadProject(dir);
-    const provider = deps.provider ?? resolveVoiceProvider(project);
+    const paths = projectPaths(dir);
+    const provider = deps.provider ?? resolveVoiceProvider(project, { baseDir: paths.dir });
     const extension = AUDIO_EXTENSIONS[provider.id];
     if (extension === undefined) {
       throw new Error(
@@ -54,7 +55,6 @@ export async function runVoice(args: string[], deps: VoiceCommandDeps = {}): Pro
         `Bekannt: ${Object.keys(AUDIO_EXTENSIONS).join(", ")}.`,
       );
     }
-    const paths = projectPaths(dir);
     await mkdir(paths.ttsDir, { recursive: true });
 
     const report: VoiceReport = { generated: [], skipped: [], failed: [] };

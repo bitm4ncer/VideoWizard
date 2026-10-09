@@ -39,9 +39,9 @@ In `project.json` waehlt `capabilities.voice.provider` beziehungsweise
   `ELEVENLABS_API_KEY`.
 - `options.secret.file`: Pfad zu einer Schluesseldatei. Zuerst liest der Kern
   die Umgebungsvariable; erst wenn sie leer ist, kommt die Datei. Sie darf
-  den nackten Wert oder eine Zeile `ELEVENLABS_API_KEY=wert` enthalten. Der
-  Pfad gilt so, wie er dasteht; relativ dazu ist das Arbeitsverzeichnis des
-  Aufrufs.
+  den nackten Wert oder eine Zeile `ELEVENLABS_API_KEY=wert` enthalten. Ein
+  relativer Pfad gilt zum Projektordner (bei `project.json`); ein absoluter
+  Pfad gilt so, wie er dasteht.
 - `voice`: `options.voice_id` ist fuer `vz voice` Pflicht; fehlt sie, wirft
   der Lauf mit klarer Meldung. `options.model` (etwa
   `eleven_multilingual_v2`), `stability`, `similarity_boost` und `speed` sind

@@ -1,11 +1,28 @@
 import { readFile } from "node:fs/promises";
+import { isAbsolute, resolve } from "node:path";
 
 /** Woher ein Geheimnis kommen kann: aus der Umgebung oder aus einer Datei. */
 export interface SecretSource {
   /** Der Name der Umgebungsvariable, zum Beispiel ELEVENLABS_API_KEY. */
   env?: string;
-  /** Der Pfad der Schluesseldatei. Der Aufrufer reicht ihn absolut herein. */
+  /**
+   * Der Pfad der Schluesseldatei. Der Aufrufer reicht ihn absolut herein;
+   * `resolveSecretSource` loest einen relativen Pfad vorher gegen den
+   * Projektordner auf.
+   */
   file?: string;
+}
+
+/**
+ * Loest eine relative Schluesseldatei gegen den Projektordner auf. Ein
+ * absoluter Pfad, eine Quelle ohne Datei und ein fehlender Basisordner
+ * bleiben unveraendert. `resolveSecret` selbst kennt weiterhin kein Projekt.
+ */
+export function resolveSecretSource(source: SecretSource, baseDir?: string): SecretSource {
+  if (source.file === undefined || baseDir === undefined || isAbsolute(source.file)) {
+    return source;
+  }
+  return { ...source, file: resolve(baseDir, source.file) };
 }
 
 /**

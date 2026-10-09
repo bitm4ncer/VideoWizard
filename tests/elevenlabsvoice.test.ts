@@ -213,6 +213,25 @@ describe("elevenlabsVoiceProvider: einen Take erzeugen", () => {
     expect(error.message).not.toContain(KEY);
   });
 
+  it("schwaerzt den Schluessel auch, wenn die 400-Zeichen-Grenze ihn zerschneiden wuerde", async () => {
+    // Der Schluessel beginnt bei Zeichen 395: Wuerde erst gekuerzt und dann
+    // geschwaerzt, stuende sein Praefix in der Meldung.
+    const key = "Zq7-randfall-nie-auftauchen";
+    const { fetch } = stubFetch([() => new Response("x".repeat(395) + key, { status: 401 })]);
+    const provider = elevenlabsVoiceProvider(
+      { voice_id: VOICE_ID },
+      { fetch, env: { ELEVENLABS_API_KEY: key } },
+    );
+
+    const error = await errorOf(provider.speak("Hallo", {}));
+
+    expect(error.message).toMatch(/HTTP 401/);
+    // Kein Praefix des Schluessels taucht in der Meldung auf.
+    for (let length = 1; length <= key.length; length += 1) {
+      expect(error.message).not.toContain(key.slice(0, length));
+    }
+  });
+
   it("wirft ohne Audio in der Antwort", async () => {
     const { fetch } = stubFetch([() => json({ alignment: ALIGNMENT })]);
     const provider = elevenlabsVoiceProvider(

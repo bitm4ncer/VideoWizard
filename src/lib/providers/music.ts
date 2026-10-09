@@ -30,6 +30,11 @@ export interface MusicDeps {
   maxWaitMs?: number;
   /** Die Umgebung fuer Geheimnisse; Vorgabe: process.env. Einhakbar fuer Tests. */
   env?: Record<string, string | undefined>;
+  /**
+   * Der Projektordner, gegen den eine relative Schluesseldatei aufgeloest
+   * wird. Fehlt er, gilt der Pfad so, wie er dasteht.
+   */
+  baseDir?: string;
 }
 
 /** Ein Take-Wunsch an einen Musik-Anbieter. */

@@ -39,6 +39,8 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
+  vi.unstubAllEnvs();
 });
 
 function text(lines: string[]): string {
@@ -350,6 +352,41 @@ describe("runVoice", () => {
       generated_at: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/),
     });
     expect(await readFile(join(dir, "audio", "tts", "b001.mp3"))).toEqual(Buffer.from("ton:Frisch"));
+  });
+
+  it("findet eine relative Schluesseldatei neben dem Projekt, auch aus einem fremden Arbeitsverzeichnis", async () => {
+    const key = "sk-woanders-nie-auftauchen";
+    const dir = await tempProject(beispiel(
+      [block({ id: "b001", text: "Frisch" })],
+      {
+        capabilities: {
+          voice: {
+            provider: "elevenlabs",
+            options: { voice_id: "bAFkvitDGeDMmqo9gJzO", secret: { file: "key.txt" } },
+          },
+        },
+      },
+    ));
+    await writeFile(join(dir, "key.txt"), `${key}\n`, "utf8");
+    vi.stubEnv("ELEVENLABS_API_KEY", "");
+    const audio = Buffer.from("ton-woanders");
+    vi.stubGlobal("fetch", async () => new Response(
+      JSON.stringify({ audio_base64: audio.toString("base64"), alignment: null }),
+      { status: 200, headers: { "Content-Type": "application/json" } },
+    ));
+    const { run } = probeRun(4.2);
+    const original = process.cwd();
+    const elsewhere = await mkdtemp(join(tmpdir(), "vw-commands-woanders-"));
+    process.chdir(elsewhere);
+    try {
+      const code = await runVoice([dir], { run });
+
+      expect(code).toBe(0);
+      expect(err).toEqual([]);
+      expect(await readFile(join(dir, "audio", "tts", "b001.mp3"))).toEqual(audio);
+    } finally {
+      process.chdir(original);
+    }
   });
 
   it("haelt den Lauf bei einem Blockfehler nicht an und meldet ihn", async () => {

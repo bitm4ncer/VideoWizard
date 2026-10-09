@@ -27,6 +27,8 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
+  vi.unstubAllEnvs();
 });
 
 function text(lines: string[]): string {
@@ -211,6 +213,29 @@ describe("runMusic: generate", () => {
     const project = await loadProject(dir);
     expect(project.audio?.music?.file).toBe("audio/music.mp3");
     expect(await readFile(join(dir, "audio", "music.mp3"))).toEqual(Buffer.from("mp3"));
+  });
+
+  it("findet eine relative Schluesseldatei neben dem Projekt, auch aus einem fremden Arbeitsverzeichnis", async () => {
+    const key = "sk-woanders-nie-auftauchen";
+    const dir = await tempProject(beispiel({
+      capabilities: { music: { provider: "elevenlabs", options: { secret: { file: "key.txt" } } } },
+    }));
+    await writeFile(join(dir, "key.txt"), `${key}\n`, "utf8");
+    vi.stubEnv("ELEVENLABS_API_KEY", "");
+    const bytes = [4, 5, 6];
+    vi.stubGlobal("fetch", async () => new Response(new Uint8Array(bytes), { status: 200 }));
+    const original = process.cwd();
+    const elsewhere = await mkdtemp(join(tmpdir(), "vw-music-woanders-"));
+    process.chdir(elsewhere);
+    try {
+      const code = await runMusic([dir, "generate", "--prompt", "ruhig", "--seconds", "5", "--yes"]);
+
+      expect(code).toBe(0);
+      expect(err).toEqual([]);
+      expect(await readFile(join(dir, "audio", "music.mp3"))).toEqual(Buffer.from(bytes));
+    } finally {
+      process.chdir(original);
+    }
   });
 
   it("nimmt ohne --seconds die Summe der Stimmdauern und Pausen vertonter Bloecke", async () => {

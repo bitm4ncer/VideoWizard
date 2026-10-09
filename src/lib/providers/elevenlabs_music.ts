@@ -15,7 +15,7 @@
  * Meldung auf, auch nicht im Fehlerfall.
  */
 
-import { resolveSecret } from "../secrets.js";
+import { resolveSecret, resolveSecretSource } from "../secrets.js";
 import type { SecretSource } from "../secrets.js";
 import type { FetchLike, MusicDeps, MusicProvider, MusicRequest } from "./music.js";
 
@@ -78,14 +78,16 @@ function redact(message: string, apiKey: string): string {
 /**
  * Der ElevenLabs-Anbieter hinter dem gemeinsamen Vertrag. `deps.fetch` und
  * `deps.env` sind einhakbar, damit der Test ohne Netz und ohne echten
- * Schluessel laeuft.
+ * Schluessel laeuft; `deps.baseDir` loest eine relative Schluesseldatei gegen
+ * den Projektordner auf.
  */
 export function elevenlabsMusicProvider(
   cfg: ElevenLabsMusicOptions,
   deps: MusicDeps = {},
 ): MusicProvider {
   const fetchFn: FetchLike = deps.fetch ?? fetch;
-  const secret = cfg.secret ?? DEFAULT_SECRET;
+  const configured = cfg.secret ?? DEFAULT_SECRET;
+  const secret = resolveSecretSource(configured, deps.baseDir);
 
   return {
     id: "elevenlabs",
@@ -100,7 +102,7 @@ export function elevenlabsMusicProvider(
     generate: async (req: MusicRequest): Promise<Buffer> => {
       const key = await resolveSecret(secret, { env: deps.env });
       if (key === null) {
-        throw new Error(`ElevenLabs: Der Schluessel fehlt (${secretHint(secret)}).`);
+        throw new Error(`ElevenLabs: Der Schluessel fehlt (${secretHint(configured)}).`);
       }
 
       // music_length_ms = seconds * 1000, wie in der Vorlage auf ganze
@@ -121,7 +123,7 @@ export function elevenlabsMusicProvider(
         const raw = await response.text().catch(() => "");
         throw new Error(
           `ElevenLabs Musik scheiterte (HTTP ${response.status}): ` +
-          redact(raw.slice(0, 400), key),
+          redact(raw, key).slice(0, 400),
         );
       }
 

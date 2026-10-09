@@ -16,7 +16,7 @@
  * Meldung auf, auch nicht im Fehlerfall.
  */
 
-import { resolveSecret } from "../secrets.js";
+import { resolveSecret, resolveSecretSource } from "../secrets.js";
 import type { SecretSource } from "../secrets.js";
 import type { Alignment, FetchLike, VoiceDeps, VoiceProvider, VoiceTake } from "./voice.js";
 
@@ -121,14 +121,16 @@ function requestBody(cfg: ElevenLabsVoiceOptions, text: string): Record<string, 
 /**
  * Der ElevenLabs-Anbieter hinter dem gemeinsamen Vertrag. `deps.fetch` und
  * `deps.env` sind einhakbar, damit der Test ohne Netz und ohne echten
- * Schluessel laeuft.
+ * Schluessel laeuft; `deps.baseDir` loest eine relative Schluesseldatei gegen
+ * den Projektordner auf.
  */
 export function elevenlabsVoiceProvider(
   cfg: ElevenLabsVoiceOptions,
   deps: VoiceDeps = {},
 ): VoiceProvider {
   const fetchFn: FetchLike = deps.fetch ?? fetch;
-  const secret = cfg.secret ?? DEFAULT_SECRET;
+  const configured = cfg.secret ?? DEFAULT_SECRET;
+  const secret = resolveSecretSource(configured, deps.baseDir);
 
   return {
     id: "elevenlabs",
@@ -143,7 +145,7 @@ export function elevenlabsVoiceProvider(
     speak: async (text): Promise<VoiceTake> => {
       const key = await resolveSecret(secret, { env: deps.env });
       if (key === null) {
-        throw new Error(`ElevenLabs: Der Schluessel fehlt (${secretHint(secret)}).`);
+        throw new Error(`ElevenLabs: Der Schluessel fehlt (${secretHint(configured)}).`);
       }
 
       const response = await fetchFn(
@@ -158,7 +160,7 @@ export function elevenlabsVoiceProvider(
         const raw = await response.text().catch(() => "");
         throw new Error(
           `ElevenLabs Sprachausgabe scheiterte (HTTP ${response.status}): ` +
-          redact(raw.slice(0, 400), key),
+          redact(raw, key).slice(0, 400),
         );
       }
 
