@@ -12,7 +12,9 @@ import type { CapabilityChoice, Project } from "../src/lib/types.js";
 
 const KEY = "sk-eleven-darf-nie-auftauchen";
 const VOICE_ID = "bAFkvitDGeDMmqo9gJzO";
-const URL = `https://api.elevenlabs.io/v1/text-to-speech/${VOICE_ID}/with-timestamps`;
+const URL =
+  `https://api.elevenlabs.io/v1/text-to-speech/${VOICE_ID}/with-timestamps` +
+  `?output_format=mp3_44100_128`;
 
 /** Echte Zeichenzeiten mit vielen Nachkommastellen: nichts darf gerundet werden. */
 const ALIGNMENT = {

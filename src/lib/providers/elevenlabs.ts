@@ -8,9 +8,9 @@
  *
  * Der Aufruf stammt aus der VideoPipeline (src/lib/elevenlabs.ts,
  * `textToSpeechWithTimestamps`):
- * POST /v1/text-to-speech/{voice_id}/with-timestamps mit der Kopfzeile
- * `xi-api-key` und dem Rumpf { text, model_id, voice_settings }. Die Antwort
- * traegt { audio_base64, alignment }.
+ * POST /v1/text-to-speech/{voice_id}/with-timestamps?output_format=mp3_44100_128
+ * mit der Kopfzeile `xi-api-key` und dem Rumpf { text, model_id, voice_settings }.
+ * Die Antwort traegt { audio_base64, alignment }.
  *
  * Der Schluessel kommt aus einer SecretSource; der Wert taucht in keiner
  * Meldung auf, auch nicht im Fehlerfall.
@@ -21,6 +21,9 @@ import type { SecretSource } from "../secrets.js";
 import type { Alignment, FetchLike, VoiceDeps, VoiceProvider, VoiceTake } from "./voice.js";
 
 const BASE = "https://api.elevenlabs.io";
+
+/** Ausgabeformat der Sprachsynthese; dazu passt die Endung MP3 im Befehl voice. */
+const TTS_FORMAT = "mp3_44100_128";
 
 /** Die Vorgabe der Schluessel-Quelle: nur die Umgebungsvariable, keine Datei. */
 const DEFAULT_SECRET: SecretSource = { env: "ELEVENLABS_API_KEY" };
@@ -144,7 +147,7 @@ export function elevenlabsVoiceProvider(
       }
 
       const response = await fetchFn(
-        `${BASE}/v1/text-to-speech/${cfg.voice_id}/with-timestamps`,
+        `${BASE}/v1/text-to-speech/${cfg.voice_id}/with-timestamps?output_format=${TTS_FORMAT}`,
         {
           method: "POST",
           headers: { "xi-api-key": key, "Content-Type": "application/json" },

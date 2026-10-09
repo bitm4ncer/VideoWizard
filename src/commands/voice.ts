@@ -16,10 +16,10 @@ export interface VoiceCommandDeps {
 
 /**
  * Die Endung der Tondatei je Anbieter. Der Sprach-Vertrag kennt kein
- * Formatfeld; Voicebox liefert WAV. Ein neuer Anbieter traegt seine Endung
- * hier ein, bevor er verdrahtet wird.
+ * Formatfeld; Voicebox liefert WAV, ElevenLabs MP3 (mp3_44100_128). Ein
+ * neuer Anbieter traegt seine Endung hier ein, bevor er verdrahtet wird.
  */
-const AUDIO_EXTENSIONS: Record<string, string> = { voicebox: "wav" };
+const AUDIO_EXTENSIONS: Record<string, string> = { voicebox: "wav", elevenlabs: "mp3" };
 
 /** Was der Lauf erzeugt, uebersprungen und nicht geschafft hat. */
 interface VoiceReport {

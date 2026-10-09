@@ -148,14 +148,16 @@ function recordingRun(): { calls: Array<{ bin: string; args: string[] }>; run: R
 
 /**
  * Ein Sprach-Anbieter, der die gesprochenen Texte aufzeichnet und die Sprache
- * aus dem Aufruf uebernimmt. `speak` weicht ueber den uebergebenen Haken ab.
+ * aus dem Aufruf uebernimmt. `speak` weicht ueber den uebergebenen Haken ab;
+ * die Kennung ist einstellbar, damit die Ton-Endung je Anbieter pruefbar ist.
  */
 function fakeProvider(
   speak: (text: string) => Promise<Buffer>,
+  id = "voicebox",
 ): VoiceProvider & { spoken: Array<{ text: string; language?: string }> } {
   const spoken: Array<{ text: string; language?: string }> = [];
   return {
-    id: "voicebox",
+    id,
     spoken,
     detect: async () => true,
     speak: async (text, opts) => {
@@ -328,6 +330,26 @@ describe("runVoice", () => {
     expect(await readFile(join(dir, "audio", "tts", "b001.wav"))).toEqual(Buffer.from("ton:Frisch"));
     expect(await readFile(join(dir, "audio", "tts", "b004.wav"))).toEqual(Buffer.from("ton:Alt"));
     expect((await readdir(join(dir, "audio", "tts"))).sort()).toEqual(["b001.wav", "b004.wav"]);
+  });
+
+  it("schreibt mit dem ElevenLabs-Anbieter audio/tts/<id>.mp3", async () => {
+    const dir = await tempProject(beispiel([block({ id: "b001", text: "Frisch" })]));
+    const provider = fakeProvider(async (spoken) => Buffer.from(`ton:${spoken}`), "elevenlabs");
+    const { run } = probeRun(4.2);
+
+    const code = await runVoice([dir], { provider, run });
+
+    expect(code).toBe(0);
+    expect(text(out)).toContain("1 erzeugt, 0 uebersprungen, 0 fehlgeschlagen");
+    expect(err).toEqual([]);
+    const project = await loadProject(dir);
+    expect(project.blocks[0]?.tts).toEqual({
+      file: "audio/tts/b001.mp3",
+      duration: 4.2,
+      hash: ttsHash("Frisch", "elevenlabs"),
+      generated_at: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/),
+    });
+    expect(await readFile(join(dir, "audio", "tts", "b001.mp3"))).toEqual(Buffer.from("ton:Frisch"));
   });
 
   it("haelt den Lauf bei einem Blockfehler nicht an und meldet ihn", async () => {
