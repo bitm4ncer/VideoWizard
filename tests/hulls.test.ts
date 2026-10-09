@@ -1,5 +1,6 @@
-import { readFile, stat } from "node:fs/promises";
-import { join } from "node:path";
+import type { Dirent } from "node:fs";
+import { readFile, readdir, stat } from "node:fs/promises";
+import { join, relative, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { describe, expect, it } from "vitest";
 
@@ -17,6 +18,62 @@ function repoFile(relativePath: string): string {
   return join(repoRoot, ...relativePath.split("/"));
 }
 
+/** Die Plugin-Metadaten, wie Claude Code sie liest. */
+async function readPluginJson(): Promise<Record<string, unknown>> {
+  const raw = await readFile(repoFile(".claude-plugin/plugin.json"), "utf8");
+  return JSON.parse(raw) as Record<string, unknown>;
+}
+
+/** Ob der Pfad eine Datei ist; fehlende Pfade sind keine. */
+async function isFile(path: string): Promise<boolean> {
+  try {
+    return (await stat(path)).isFile();
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Die Skill-Ordner, die der Claude-Loader unter einem manifesten Pfad ohne
+ * Rekursion findet: nur unmittelbare Kinder <pfad>/<name>/SKILL.md.
+ */
+async function skillDirsUnder(dir: string): Promise<string[]> {
+  let entries: Dirent[];
+  try {
+    entries = await readdir(dir, { withFileTypes: true });
+  } catch {
+    return [];
+  }
+  const found: string[] = [];
+  for (const entry of entries) {
+    if (!entry.isDirectory() || entry.name.startsWith(".")) continue;
+    if (await isFile(join(dir, entry.name, "SKILL.md"))) {
+      found.push(entry.name);
+    }
+  }
+  return found;
+}
+
+/** Alle SKILL.md unterhalb von dir, rekursiv, relativ zur Repo-Wurzel mit "/". */
+async function alleSkillDateien(dir: string): Promise<string[]> {
+  let entries: Dirent[];
+  try {
+    entries = await readdir(dir, { withFileTypes: true });
+  } catch {
+    return [];
+  }
+  const found: string[] = [];
+  for (const entry of entries) {
+    const full = join(dir, entry.name);
+    if (entry.isDirectory()) {
+      found.push(...(await alleSkillDateien(full)));
+    } else if (entry.isFile() && entry.name === "SKILL.md") {
+      found.push(relative(repoRoot, full).split(sep).join("/"));
+    }
+  }
+  return found;
+}
+
 /** Die neuen Dateien, fuer die die Geviertstrich-Regel gilt. */
 const neueDateien = [
   ".claude-plugin/plugin.json",
@@ -27,13 +84,47 @@ const neueDateien = [
 
 describe("die Claude-Code-Huelle", () => {
   it("ist gueltiges JSON mit name, description, version und license", async () => {
-    const raw = await readFile(repoFile(".claude-plugin/plugin.json"), "utf8");
-    const plugin = JSON.parse(raw) as Record<string, unknown>;
+    const plugin = await readPluginJson();
     for (const key of ["name", "description", "version", "license"]) {
       const value = plugin[key];
       expect(typeof value, key).toBe("string");
       expect((value as string).length, key).toBeGreaterThan(0);
     }
+  });
+
+  it("hat eine Autorenangabe", async () => {
+    const plugin = await readPluginJson();
+    const author = plugin.author as { name?: unknown } | undefined;
+    expect(typeof author?.name, "author.name").toBe("string");
+    expect((author?.name as string).length, "author.name").toBeGreaterThan(0);
+  });
+
+  it("deklariert Skill-Ordner, die der Claude-Loader ohne Rekursion findet", async () => {
+    const plugin = await readPluginJson();
+    const skills = plugin.skills;
+    expect(Array.isArray(skills), "skills").toBe(true);
+    const eintraege = skills as unknown[];
+    expect(eintraege.length, "skills").toBeGreaterThan(0);
+
+    // Der Loader liest <pfad>/<name>/SKILL.md, ohne weiter zu rekursieren.
+    // Deshalb muss jeder Skills-Ordner direkt als solcher Pfad taugen.
+    const ausManifest = new Set<string>();
+    for (const eintrag of eintraege) {
+      expect(typeof eintrag, "skills-Eintrag").toBe("string");
+      const pfad = (eintrag as string).replace(/^\.\//, "").replace(/\/$/, "");
+      expect(pfad.length, "skills-Eintrag").toBeGreaterThan(0);
+      const absolut = repoFile(pfad);
+      expect((await stat(absolut)).isDirectory(), pfad).toBe(true);
+      const namen = await skillDirsUnder(absolut);
+      expect(namen.length, pfad).toBeGreaterThan(0);
+      for (const name of namen) {
+        ausManifest.add(`${pfad}/${name}/SKILL.md`);
+      }
+    }
+
+    // Kein Skill unter skills/ darf durchs Raster fallen.
+    const alle = await alleSkillDateien(repoFile("skills"));
+    expect([...ausManifest].sort()).toEqual(alle.sort());
   });
 });
 

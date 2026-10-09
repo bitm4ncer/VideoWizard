@@ -2,5 +2,16 @@
   "name": "videowizard",
   "description": "Universal agent suite for video planning and production: portable skills, a CLI and an MCP server over the same commands.",
   "version": "0.1.0",
-  "license": "UNLICENSED"
+  "author": {
+    "name": "bitmancer",
+    "email": "bitmancer@wndrbr.de"
+  },
+  "license": "UNLICENSED",
+  "skills": [
+    "./skills/meta",
+    "./skills/planning",
+    "./skills/producing",
+    "./skills/tools",
+    "./skills/reference"
+  ]
 }
