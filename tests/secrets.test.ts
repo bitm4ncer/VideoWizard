@@ -88,23 +88,27 @@ describe("resolveSecret", () => {
       vi.spyOn(console, "log"),
       vi.spyOn(console, "warn"),
       vi.spyOn(console, "error"),
+      vi.spyOn(console, "info"),
+      vi.spyOn(console, "debug"),
     ];
 
     let ergebnis: string | null | undefined;
     let fehler = "";
+    let meldungen: string[] = [];
     try {
       ergebnis = await resolveSecret({ env: "FEHLT", file: fehlend }, { env: {} });
     } catch (error) {
       fehler = String(error);
     } finally {
+      // Zuerst lesen, dann zuruecksetzen: mockRestore leert die Aufrufliste.
+      meldungen = spione.flatMap((spion) =>
+        spion.mock.calls.map((aufruf) => aufruf.join(" ")),
+      );
       for (const spion of spione) spion.mockRestore();
     }
 
     expect(fehler).toBe("");
     expect(ergebnis).toBeNull();
-    const meldungen = spione.flatMap((spion) =>
-      spion.mock.calls.map((aufruf) => aufruf.join(" ")),
-    );
     expect(meldungen.join("\n")).not.toContain(wert);
   });
 
