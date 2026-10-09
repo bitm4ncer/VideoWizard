@@ -1,6 +1,7 @@
 import { pathToFileURL } from "node:url";
 import { doctorCommand } from "./commands/doctor.js";
 import { ingestCommand } from "./commands/ingest.js";
+import { musicCommand } from "./commands/music.js";
 import { renderCommand } from "./commands/render.js";
 import { segmentCommand } from "./commands/segment.js";
 import { statusCommand } from "./commands/status.js";
@@ -27,6 +28,7 @@ const commands: Command[] = [
   transcribeCommand,
   segmentCommand,
   voiceCommand,
+  musicCommand,
   renderCommand,
   doctorCommand,
   {
