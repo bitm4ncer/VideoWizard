@@ -38,3 +38,6 @@ Bausteinen in `blocks/index.json`. Diese Datei wird nicht von Hand gepflegt.
 - **beats-short-retention**: Retention-Struktur fuer Shorts: Hook, Confirm, Payoff, Loop oder CTA (Lizenz: MIT)
 - **ffmpeg-captions**: Wortzeiten als ASS-Untertitel brennen, Stilwerte aus der Safe-Zone (Lizenz: MIT)
 - **ffmpeg-loudnorm**: Loudness nach EBU R128: Stimme auf -16, Endmischung auf -14 LUFS (Lizenz: MIT)
+- **scaffold-client-asset**: Geruest fuer Kundenarbeit: plan.md mit Treatment, Visuellem Thema, Shotliste, Freigaben und Entscheidungen, dazu eine project.json-Vorlage (Lizenz: MIT)
+- **style-bold-short**: Laute Style-Karte: harte Schnitte, fette Typografie, kraeftiges Grading fuer Shorts (Lizenz: MIT)
+- **style-clean-tutorial**: Ruhige Style-Karte: helle Palette, klare Typografie, sanfte Motion fuer Tutorials (Lizenz: MIT)

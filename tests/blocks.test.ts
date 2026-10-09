@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { checkIntegrity, loadBlock, loadIndex } from "../src/lib/blocks.js";
 import type { BlockEntry } from "../src/lib/blocks.js";
+import { CURRENT_SCHEMA, loadProject } from "../src/lib/project.js";
 
 /** Die Repo-Wurzel, in der die echten Bausteine liegen. */
 const repoRoot = fileURLToPath(new URL("..", import.meta.url));
@@ -137,7 +138,7 @@ describe("checkIntegrity", () => {
 describe("die Startbausteine", () => {
   it("stehen mit den festgelegten Feldern im Verzeichnis", async () => {
     const eintraege = await loadIndex(repoRoot);
-    expect(eintraege).toHaveLength(3);
+    expect(eintraege).toHaveLength(6);
 
     const loudnorm = eintraege.find((entry) => entry.id === "ffmpeg-loudnorm");
     expect(loudnorm?.kind).toBe("ffmpeg-recipe");
@@ -161,6 +162,38 @@ describe("die Startbausteine", () => {
     expect(captions?.version).toBe(1);
     expect(captions?.entry).toBe("ffmpeg/captions/recipe.md");
     expect(captions?.requires.tools).toContain("ffmpeg");
+
+    const scaffold = eintraege.find((entry) => entry.id === "scaffold-client-asset");
+    expect(scaffold?.kind).toBe("scaffold");
+    expect(scaffold?.capability).toBe("planning");
+    expect(scaffold?.inputs).toEqual([]);
+    expect(scaffold?.requires).toEqual({ tools: [], providers: [] });
+    expect(scaffold?.license).toBe("MIT");
+    expect(scaffold?.version).toBe(1);
+    expect(scaffold?.entry).toBe("scaffolds/client-asset/plan.md");
+
+    const cleanTutorial = eintraege.find((entry) => entry.id === "style-clean-tutorial");
+    expect(cleanTutorial?.kind).toBe("style");
+    expect(cleanTutorial?.capability).toBe("style");
+    expect(cleanTutorial?.inputs).toEqual([]);
+    expect(cleanTutorial?.requires).toEqual({ tools: [], providers: [] });
+    expect(cleanTutorial?.license).toBe("MIT");
+    expect(cleanTutorial?.version).toBe(1);
+    expect(cleanTutorial?.entry).toBe("styles/clean-tutorial/STYLE.md");
+
+    const boldShort = eintraege.find((entry) => entry.id === "style-bold-short");
+    expect(boldShort?.kind).toBe("style");
+    expect(boldShort?.capability).toBe("style");
+    expect(boldShort?.inputs).toEqual([]);
+    expect(boldShort?.requires).toEqual({ tools: [], providers: [] });
+    expect(boldShort?.license).toBe("MIT");
+    expect(boldShort?.version).toBe(1);
+    expect(boldShort?.entry).toBe("styles/bold-short/STYLE.md");
+
+    // Reihenfolge im Verzeichnis: erst das Scaffold, dann die Style-Karten.
+    const ids = eintraege.map((entry) => entry.id);
+    expect(ids.indexOf("scaffold-client-asset")).toBeLessThan(ids.indexOf("style-clean-tutorial"));
+    expect(ids.indexOf("style-clean-tutorial")).toBeLessThan(ids.indexOf("style-bold-short"));
   });
 
   it("laedt das loudnorm-Rezept mit seinen exakten Werten", async () => {
@@ -209,4 +242,89 @@ describe("die Startbausteine", () => {
     expect(inhalt).toContain("subtitles=");
     expect(inhalt).toMatch(/Safe-Zone/);
   });
+
+  it("laedt das client-asset-Scaffold mit plan.md und project.json", async () => {
+    const block = await loadBlock(repoRoot, "scaffold-client-asset");
+    expect(block.files).toEqual([
+      "blocks/scaffolds/client-asset/plan.md",
+      "blocks/scaffolds/client-asset/project.json",
+    ]);
+  });
+
+  it("traegt im Scaffold-plan.md die fuenf Abschnitte und das Treatment", async () => {
+    const inhalt = await readFile(
+      join(repoRoot, "blocks", "scaffolds", "client-asset", "plan.md"),
+      "utf8",
+    );
+    for (const abschnitt of [
+      "Treatment",
+      "Visuelles Thema",
+      "Shotliste",
+      "Freigaben",
+      "Entscheidungen",
+    ]) {
+      expect(inhalt).toContain(`## ${abschnitt}`);
+    }
+    for (const punkt of [
+      "Ausgangslage",
+      "Zielgruppe",
+      "Kernbotschaft",
+      "Ton",
+      "Referenzen",
+      "Anforderungen",
+      "Ausschluesse",
+    ]) {
+      expect(inhalt).toContain(`| ${punkt} |`);
+    }
+  });
+
+  it("laedt die Scaffold-project.json als gueltige Projektdatei ohne fremde Felder", async () => {
+    const dir = join(repoRoot, "blocks", "scaffolds", "client-asset");
+    const project = await loadProject(dir);
+    expect(project.schema).toBe(CURRENT_SCHEMA);
+
+    const roh = JSON.parse(
+      await readFile(join(dir, "project.json"), "utf8"),
+    ) as Record<string, unknown>;
+    const pflicht = [
+      "schema",
+      "id",
+      "title",
+      "format",
+      "language",
+      "sources",
+      "blocks",
+      "capabilities",
+      "delivery",
+    ];
+    for (const feld of pflicht) {
+      expect(roh, `Feld ${feld}`).toHaveProperty(feld);
+    }
+    // Nur Felder aus Project in src/lib/types.ts; audio und outro sind optional.
+    const erlaubt = new Set([...pflicht, "audio", "outro"]);
+    expect(Object.keys(roh).filter((feld) => !erlaubt.has(feld))).toEqual([]);
+  });
+
+  it.each(["clean-tutorial", "bold-short"])(
+    "traegt die Style-Karte %s mit allen sechs Abschnitten",
+    async (name) => {
+      const block = await loadBlock(repoRoot, `style-${name}`);
+      expect(block.files).toEqual([`blocks/styles/${name}/STYLE.md`]);
+
+      const inhalt = await readFile(
+        join(repoRoot, "blocks", "styles", name, "STYLE.md"),
+        "utf8",
+      );
+      for (const abschnitt of [
+        "Palette",
+        "Typografie",
+        "Motion",
+        "Grading",
+        "Regeln",
+        "Frame-Checkliste",
+      ]) {
+        expect(inhalt).toContain(`## ${abschnitt}`);
+      }
+    },
+  );
 });

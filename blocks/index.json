@@ -31,5 +31,38 @@
     "license": "MIT",
     "version": 1,
     "entry": "ffmpeg/captions/recipe.md"
+  },
+  {
+    "id": "scaffold-client-asset",
+    "kind": "scaffold",
+    "capability": "planning",
+    "purpose": "Geruest fuer Kundenarbeit: plan.md mit Treatment, Visuellem Thema, Shotliste, Freigaben und Entscheidungen, dazu eine project.json-Vorlage",
+    "inputs": [],
+    "requires": { "tools": [], "providers": [] },
+    "license": "MIT",
+    "version": 1,
+    "entry": "scaffolds/client-asset/plan.md"
+  },
+  {
+    "id": "style-clean-tutorial",
+    "kind": "style",
+    "capability": "style",
+    "purpose": "Ruhige Style-Karte: helle Palette, klare Typografie, sanfte Motion fuer Tutorials",
+    "inputs": [],
+    "requires": { "tools": [], "providers": [] },
+    "license": "MIT",
+    "version": 1,
+    "entry": "styles/clean-tutorial/STYLE.md"
+  },
+  {
+    "id": "style-bold-short",
+    "kind": "style",
+    "capability": "style",
+    "purpose": "Laute Style-Karte: harte Schnitte, fette Typografie, kraeftiges Grading fuer Shorts",
+    "inputs": [],
+    "requires": { "tools": [], "providers": [] },
+    "license": "MIT",
+    "version": 1,
+    "entry": "styles/bold-short/STYLE.md"
   }
 ]

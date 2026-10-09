@@ -1,0 +1,11 @@
+{
+  "schema": 1,
+  "id": "<projekt-id>",
+  "title": "<Projekttitel>",
+  "format": { "fps": 30, "width": 1920, "height": 1080 },
+  "language": { "recorded": "de", "output": "de" },
+  "sources": [],
+  "blocks": [],
+  "capabilities": {},
+  "delivery": { "targets": ["youtube"] }
+}
