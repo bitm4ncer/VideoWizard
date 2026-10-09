@@ -39,3 +39,10 @@ Etappen; dieses Skill verspricht keinen Befehl, den es noch nicht gibt.
 
 Ein Projekt ist ein Ordner mit `project.json` als Wahrheitsdatei;
 `vz status [ordner]` zeigt, ob dort eines liegt.
+
+## Als MCP
+
+Derselbe Bestand laeuft als MCP-Server: `npm --silent run mcp`. Er bietet neun
+Werkzeuge: `doctor`, `status`, `ingest`, `transcribe`, `segment`, `voice`,
+`music_adopt`, `music_generate` und `render`. Jedes Werkzeug ruft denselben
+Befehl auf wie `vz` und liefert dessen Ausgabe zurueck.
