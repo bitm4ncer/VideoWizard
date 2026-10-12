@@ -28,9 +28,9 @@ legt ihn woandershin, `--force` ersetzt einen belegten Zielordner.
   auf einer leeren Timeline.
 - `take`-Bloecke folgen der Sync-Logik des Renderers: entfernte Pausen
   werden getrimmte Bereiche einer `sequence`, verlangsamte Bloecke bekommen
-  Tempo (`playbackRate`) und ein extrahiertes Haltebild, Ueberlaenge behalten
-  das volle Bildfenster. Der Quellfilm steht per `sourceIn`/`sourceOut` auf
-  den behaltenen Bereichen, der Quellton ist stumm.
+  Tempo (`playbackRate`) und gegebenenfalls ein extrahiertes Haltebild,
+  Ueberlaenge behalten das volle Bildfenster. Der Quellfilm steht per
+  `sourceIn`/`sourceOut` auf den behaltenen Bereichen, der Quellton ist stumm.
 - `still`-Bloecke: der extrahierte Frame als Bild, so lang wie die Stimme.
 - TTS-Audio je Block als eigene Tonspur, sofern vertont.
 - Captions aus den Wortzeiten auf der Ausgangsachse des Schnitts, sofern die
@@ -50,7 +50,6 @@ stempelt beim Oeffnen eigene Felder; die gelieferten bleiben unberuehrt.
 
 ## Grenze
 
-Live verifiziert (10.10.2026): Oeffnen, `check` ohne Befund sowie der Trim
-und die Frames der `take`-Bloecke.
-Nur quellcodegetestet, nicht in der App live geprueft: Standbilder der
-`still`-Bloecke, Audio und Captions.
+Live verifiziert (10.10.2026): Oeffnen, beide Szenen `check` ohne Befund,
+Trim und Sequence, Captions, Still-Bild und die Audio-Kappung.
+Nur quellcodegetestet: der `hold`-Pfad (Tempo und Haltebild).
