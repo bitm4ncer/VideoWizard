@@ -40,7 +40,7 @@
     "inputs": [],
     "requires": { "tools": [], "providers": [] },
     "license": "MIT",
-    "version": 1,
+    "version": 2,
     "entry": "scaffolds/client-asset/plan.md"
   },
   {

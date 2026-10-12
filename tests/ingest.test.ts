@@ -150,6 +150,26 @@ describe("ingest", () => {
     ]);
   });
 
+  it("stempelt das lokale Datum, auch nah an Mitternacht, und nicht UTC", async () => {
+    const dir = await tempProject();
+    const videoPath = await inputFile(dir, "aufnahme.mp4");
+    const fixture = videoProbe(1280, 720, "25/1", 5);
+
+    // 23:59:59 und 00:00:01 als lokale Zeit: der Stempel folgt der lokalen
+    // Uhr, nicht dem UTC-Tag (in Berlin waere der beim zweiten Wert noch der 9.).
+    const erste = await ingest(dir, videoPath, "Erste", {
+      run: fakeRun(fixture).run,
+      now: new Date(2026, 9, 9, 23, 59, 59),
+    });
+    const zweite = await ingest(dir, videoPath, "Zweite", {
+      run: fakeRun(fixture).run,
+      now: new Date(2026, 9, 10, 0, 0, 1),
+    });
+
+    expect(erste.added).toBe("2026-10-09");
+    expect(zweite.added).toBe("2026-10-10");
+  });
+
   it("bringt eine zweite Quelle mit abweichendem Format auf das Projektformat", async () => {
     const dir = await tempProject();
     const erste = await inputFile(dir, "erste.mp4", Buffer.from("erste"));

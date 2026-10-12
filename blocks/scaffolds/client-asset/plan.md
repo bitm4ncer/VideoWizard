@@ -31,12 +31,14 @@ wird genannt; es wird nichts still gemischt.
 
 ## Shotliste
 
-| Nr | Zweck | Bildinhalt | Quelle | Text | Audio | Dauer (s) |
-|---|---|---|---|---|---|---|
-| 1 | <Beat-Aufgabe> | <was zu sehen ist> | aufnehmen | <nur on-screen, sonst leer> | <Voiceover-Zeile oder Tonangabe> | <Zahl> |
+| Nr | Zweck | Bildinhalt | Quelle | Ort/Termin | Text | Audio | Dauer (s) |
+|---|---|---|---|---|---|---|---|
+| 1 | <Beat-Aufgabe> | <was zu sehen ist> | aufnehmen | <Ort und Termin, sonst offener Punkt> | <nur on-screen, sonst leer> | <Voiceover-Zeile oder Tonangabe> | <Zahl> |
 
-6 bis 18 Shots; die Summe der Dauern passt zur Beat-Struktur. Abweichungen
-werden begruendet, nicht verschwiegen.
+6 bis 18 Shots; die Summe der Dauern passt zur Beat-Struktur. Bei
+`aufnehmen`-Shots steht in Ort/Termin ein Wert oder ein offener Punkt; bei
+`finden` und `generieren` bleibt die Spalte leer. Abweichungen werden
+begruendet, nicht verschwiegen.
 
 ## Freigaben
 

@@ -13,10 +13,11 @@ export interface LearningEntry {
 
 /**
  * Bildet einen Titel auf einen Slug ab: Kleinschreibung, Umlaute als
- * ae/oe/ue, ß als ss, alles Uebrige als Bindestrich, mehrfache Bindestriche
- * zusammen, keine Bindestriche am Rand.
+ * ae/oe/ue, ss fuer Eszett, alles Uebrige als Bindestrich, mehrfache
+ * Bindestriche zusammen, keine Bindestriche am Rand. Bleibt der Slug leer,
+ * hat der Titel keinen verwertbaren Inhalt (reine Zeichensetzung).
  */
-function slugify(title: string): string {
+export function slugify(title: string): string {
   return title
     .toLowerCase()
     .replace(/ä/g, "ae")

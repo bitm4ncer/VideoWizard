@@ -1,6 +1,6 @@
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { learningPath, renderLearning } from "../src/lib/learnings.js";
+import { learningPath, renderLearning, slugify } from "../src/lib/learnings.js";
 
 describe("learningPath", () => {
   it("bildet Titel und Datum auf einen Slug-Pfad unter learnings ab", () => {
@@ -25,6 +25,13 @@ describe("learningPath", () => {
     expect(learningPath("repo", "--Loud  &  Clear--", "2026-10-09")).toBe(
       join("repo", "learnings", "2026-10-09-loud-clear.md"),
     );
+  });
+});
+
+describe("slugify", () => {
+  it("laesst aus reiner Zeichensetzung keinen Slug uebrig", () => {
+    expect(slugify("!!!")).toBe("");
+    expect(slugify("...")).toBe("");
   });
 });
 

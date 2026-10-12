@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { copyFile, mkdir, open, stat } from "node:fs/promises";
 import { basename, join } from "node:path";
+import { localIsoDate } from "../lib/dates.js";
 import { probe, runFfmpeg } from "../lib/ffmpeg.js";
 import { projectPaths } from "../lib/paths.js";
 import { loadProject, saveProject } from "../lib/project.js";
@@ -9,10 +10,12 @@ import type { Format, Project, Source } from "../lib/types.js";
 
 /**
  * Eingehakte Fassungen fuer den Test; ohne sie laeuft echter
- * ffmpeg- und ffprobe-Prozess.
+ * ffmpeg- und ffprobe-Prozess und die aktuelle lokale Zeit.
  */
 export interface IngestDeps {
   run?: RunFn;
+  /** Feste Uhr fuer den Test; ohne sie gilt die aktuelle lokale Zeit. */
+  now?: Date;
 }
 
 /**
@@ -169,7 +172,7 @@ export async function ingest(
     id,
     label: label || basename(videoPath),
     file: `sources/${id}/raw.mp4`,
-    added: new Date().toISOString().slice(0, 10),
+    added: localIsoDate(deps.now),
     duration: finalInfo.duration,
     checksum: await sourceChecksum(target),
     normalized,

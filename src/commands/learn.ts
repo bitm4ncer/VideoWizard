@@ -1,21 +1,18 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 import { repoRoot } from "../lib/brand.js";
-import { learningPath, renderLearning } from "../lib/learnings.js";
+import { localIsoDate } from "../lib/dates.js";
+import { learningPath, renderLearning, slugify } from "../lib/learnings.js";
 
 /** Eingehakte Abhaengigkeiten fuer den Test; ohne sie gelten Repo-Wurzel und Uhr. */
 export interface LearnCommandDeps {
   root?: string;
-  today?: string;
+  /** Feste Uhr fuer den Test; ohne sie gilt die aktuelle lokale Zeit. */
+  now?: Date;
 }
 
 /** Die gepruefte Eingabe von `learn`; null bedeutet Bedienfehler. */
 type LearnArgs = { title: string; source?: string; note?: string };
-
-/** Das heutige Datum als JJJJ-MM-TT, wie die uebrigen Stempel im Repo. */
-function todayStamp(): string {
-  return new Date().toISOString().slice(0, 10);
-}
 
 function errorText(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
@@ -52,8 +49,10 @@ function parseLearnArgs(args: string[]): LearnArgs | null {
 
 /**
  * `learn "<Titel>" [--source "<Quelle>"] [--note "<Beobachtung>"]`: legt einen
- * datierten Eintrag im Belegarchiv an. Ein vorhandener Pfad wird nie
- * ueberschrieben; der Befehl nennt am Ende nur den Pfad.
+ * datierten Eintrag im Belegarchiv an. Ein Titel ohne Buchstabe und ohne
+ * Ziffer ergaebe einen Pfad ohne Namen und ist ein Bedienfehler. Ein
+ * vorhandener Pfad wird nie ueberschrieben; der Befehl nennt am Ende nur den
+ * Pfad.
  */
 export async function runLearn(args: string[], deps: LearnCommandDeps = {}): Promise<number> {
   const parsed = parseLearnArgs(args);
@@ -63,8 +62,15 @@ export async function runLearn(args: string[], deps: LearnCommandDeps = {}): Pro
     );
     return 2;
   }
+  if (slugify(parsed.title) === "") {
+    console.error(
+      `Der Titel ergibt keinen Dateinamen: ${parsed.title} ` +
+      "(es fehlt ein Buchstabe oder eine Ziffer).",
+    );
+    return 2;
+  }
   const root = deps.root ?? repoRoot();
-  const date = deps.today ?? todayStamp();
+  const date = localIsoDate(deps.now);
   const file = learningPath(root, parsed.title, date);
   try {
     await mkdir(dirname(file), { recursive: true });

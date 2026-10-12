@@ -23,8 +23,13 @@ Codex steht in `docs/install.md`.
 
 ## Etappenlage
 
-Etappen 1 bis 3 sind fertig: Geruest, Projektformat, Doctor und Bausteine, der
+Etappen 1 bis 8 sind fertig: Geruest, Projektformat, Doctor und Bausteine, der
 ffmpeg-Kern (ingest, Transkript, Bloecke, Stimme, Musik, Render) und weitere
-Anbieter. Etappe 4 (MCP-Server und Huellen fuer Claude Code, Codex und
-OpenCode) ist fertig. Etappe 5 (Improvement Loop) ist fertig; die
-Migrationskarte aus der VideoPipeline steht in `docs/migration-map.md`.
+Anbieter. Etappe 4 brachte den MCP-Server und die Huellen fuer Claude Code,
+Codex und OpenCode, Etappe 5 den Improvement Loop; die Migrationskarte aus der
+VideoPipeline steht in `docs/migration-map.md`. Etappe 6 ist die
+Kreativschicht fuer Kundenarbeit (Storyboarding mit Gates, Referenz-Analyse,
+Style-Karten, `vz review`), Etappe 7 der Einweg-Hand-off nach Diffusion Studio
+fuer den menschlichen Feinschliff. Etappe 8 macht den Hand-off fit-treu
+(Schnittfenster, Haltebilder, Captions auf der Ausgangsachse) und schliesst
+die Etappenfolge ab.

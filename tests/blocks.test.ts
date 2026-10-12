@@ -169,7 +169,7 @@ describe("die Startbausteine", () => {
     expect(scaffold?.inputs).toEqual([]);
     expect(scaffold?.requires).toEqual({ tools: [], providers: [] });
     expect(scaffold?.license).toBe("MIT");
-    expect(scaffold?.version).toBe(1);
+    expect(scaffold?.version).toBe(2);
     expect(scaffold?.entry).toBe("scaffolds/client-asset/plan.md");
 
     const cleanTutorial = eintraege.find((entry) => entry.id === "style-clean-tutorial");
@@ -276,6 +276,22 @@ describe("die Startbausteine", () => {
     ]) {
       expect(inhalt).toContain(`| ${punkt} |`);
     }
+  });
+
+  it("traegt im Scaffold-plan.md Ort und Termin fuer aufnehmen-Shots", async () => {
+    const inhalt = await readFile(
+      join(repoRoot, "blocks", "scaffolds", "client-asset", "plan.md"),
+      "utf8",
+    );
+
+    // Die Shotliste hat eine eigene Spalte; bei aufnehmen-Shots ist sie ein
+    // Wert oder ein offener Punkt, sonst bleibt sie leer.
+    const kopf = inhalt.split(/\r?\n/).find((zeile) => zeile.startsWith("| Nr |"));
+    expect(kopf).toBe(
+      "| Nr | Zweck | Bildinhalt | Quelle | Ort/Termin | Text | Audio | Dauer (s) |",
+    );
+    expect(inhalt).toContain("`aufnehmen`-Shots");
+    expect(inhalt).toContain("offener Punkt");
   });
 
   it("laedt die Scaffold-project.json als gueltige Projektdatei ohne fremde Felder", async () => {

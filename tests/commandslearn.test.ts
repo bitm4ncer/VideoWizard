@@ -1,4 +1,4 @@
-import { mkdtemp, readFile } from "node:fs/promises";
+import { mkdtemp, readdir, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -38,14 +38,16 @@ async function tempRoot(): Promise<string> {
 
 const TITLE = "FFmpeg Filter: Pfad-Apostroph";
 const DATE = "2026-10-09";
-const NAME = "2026-10-09-ffmpeg-filter-pfad-apostroph.md";
+const NAME = `${DATE}-ffmpeg-filter-pfad-apostroph.md`;
+/** Feste Uhr fuer die Tests: Mittag des Stempeltags. */
+const NOW = new Date(2026, 9, 9, 12, 0, 0);
 
 describe("runLearn", () => {
   it("legt den datierten Eintrag an, nennt den Pfad und endet mit 0", async () => {
     const root = await tempRoot();
     const file = join(root, "learnings", NAME);
 
-    const code = await runLearn([TITLE], { root, today: DATE });
+    const code = await runLearn([TITLE], { root, now: NOW });
 
     expect(code).toBe(0);
     expect(err).toEqual([]);
@@ -56,29 +58,56 @@ describe("runLearn", () => {
   it("nennt ohne Titel die Nutzung und endet mit 2", async () => {
     const root = await tempRoot();
 
-    expect(await runLearn([], { root, today: DATE })).toBe(2);
+    expect(await runLearn([], { root, now: NOW })).toBe(2);
     expect(text(err)).toMatch(/Aufruf/);
     expect(text(err)).toContain("learn");
     expect(out).toEqual([]);
     // Ein leerer Titel ist kein Titel.
-    expect(await runLearn(["   "], { root, today: DATE })).toBe(2);
+    expect(await runLearn(["   "], { root, now: NOW })).toBe(2);
     // Unbekannte Schalter sind kein stiller Zusatz.
-    expect(await runLearn([TITLE, "--quelle", "x"], { root, today: DATE })).toBe(2);
+    expect(await runLearn([TITLE, "--quelle", "x"], { root, now: NOW })).toBe(2);
   });
 
   it("ueberschreibt einen vorhandenen Eintrag nicht und nennt den Pfad mit Code 1", async () => {
     const root = await tempRoot();
     const file = join(root, "learnings", NAME);
-    expect(await runLearn([TITLE], { root, today: DATE })).toBe(0);
+    expect(await runLearn([TITLE], { root, now: NOW })).toBe(0);
     const vorher = await readFile(file, "utf8");
     out = [];
     err = [];
 
-    const code = await runLearn([TITLE], { root, today: DATE });
+    const code = await runLearn([TITLE], { root, now: NOW });
 
     expect(code).toBe(1);
     expect(text(err)).toContain(file);
     await expect(readFile(file, "utf8")).resolves.toBe(vorher);
+  });
+
+  it("stempelt das lokale Datum, auch nah an Mitternacht, und nicht UTC", async () => {
+    const root = await tempRoot();
+
+    // 23:59:59 und 00:00:01 als lokale Zeit: der Stempel folgt der lokalen
+    // Uhr, nicht dem UTC-Tag (in Berlin waere der beim zweiten Wert noch der 9.).
+    const vorMitternacht = new Date(2026, 9, 9, 23, 59, 59);
+    const nachMitternacht = new Date(2026, 9, 10, 0, 0, 1);
+    expect(await runLearn([TITLE], { root, now: vorMitternacht })).toBe(0);
+    expect(await runLearn(["Zweiter Eintrag"], { root, now: nachMitternacht })).toBe(0);
+
+    expect((await readdir(join(root, "learnings"))).sort()).toEqual([
+      NAME,
+      "2026-10-10-zweiter-eintrag.md",
+    ]);
+  });
+
+  it("weist einen Titel aus reiner Zeichensetzung als Bedienfehler ab, ohne Datei", async () => {
+    const root = await tempRoot();
+
+    const code = await runLearn(["!!!"], { root, now: NOW });
+
+    expect(code).toBe(2);
+    expect(text(err)).toMatch(/keinen Dateinamen/);
+    expect(out).toEqual([]);
+    expect(await readdir(root)).toEqual([]);
   });
 
   it("nimmt Quelle und Beobachtung in den Eintrag", async () => {
@@ -87,7 +116,7 @@ describe("runLearn", () => {
 
     const code = await runLearn(
       [TITLE, "--source", "Etappe 2b", "--note", "Der Filter reisst am Apostroph"],
-      { root, today: DATE },
+      { root, now: NOW },
     );
 
     expect(code).toBe(0);
