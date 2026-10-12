@@ -62,3 +62,7 @@ Style-Karten, `vz review`), Etappe 7 der Einweg-Hand-off nach Diffusion Studio
 fuer den menschlichen Feinschliff. Etappe 8 macht den Hand-off fit-treu
 (Schnittfenster, Haltebilder, Captions auf der Ausgangsachse) und schliesst
 die Etappenfolge ab.
+
+## Lizenz
+
+MIT, siehe `LICENSE`.

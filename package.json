@@ -2,6 +2,7 @@
   "name": "videowizard",
   "version": "0.1.0",
   "private": true,
+  "license": "MIT",
   "description": "Universal agent suite for video planning and production.",
   "type": "module",
   "engines": {

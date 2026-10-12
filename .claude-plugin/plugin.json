@@ -6,7 +6,7 @@
     "name": "bitmancer",
     "email": "bitmancer@wndrbr.de"
   },
-  "license": "UNLICENSED",
+  "license": "MIT",
   "skills": [
     "./skills/meta",
     "./skills/planning",
