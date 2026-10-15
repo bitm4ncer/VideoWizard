@@ -5,6 +5,7 @@
   "license": "MIT",
   "description": "Universal agent suite for video planning and production.",
   "type": "module",
+  "main": ".opencode/plugins/videowizard.js",
   "engines": {
     "node": ">=22"
   },
